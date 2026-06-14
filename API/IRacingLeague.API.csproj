@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <!-- Reuse the DWES1 domain + services rather than copying them. -->
+    <ProjectReference Include="..\Models\IRacingLeague.Models.csproj" />
+    <ProjectReference Include="..\Business\IRacingLeague.Business.csproj" />
+    <ProjectReference Include="..\Data.EF\IRacingLeague.Data.EF.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.14" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
+    <!-- Required in the startup project for the EF Core design-time tools (migrations). -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.14">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- The apphost pack is unavailable on the locked-down host; run via `dotnet IRacingLeague.API.dll`. -->
+    <UseAppHost>false</UseAppHost>
+  </PropertyGroup>
+
+</Project>
