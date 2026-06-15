@@ -14,18 +14,23 @@ public class StandingsService : IStandingsService
         _results = results;
     }
 
-    public IEnumerable<Registration> GetStandings(int leagueId)
+    public IEnumerable<StandingEntry> GetStandings(int leagueId)
     {
-        // Incident points live on Result, so accumulate them per registration to
-        // drive the tiebreak. Precompute once to avoid an inner scan per driver.
-        var incidentsByRegistration = _results.GetAll()
+        // Incident points and race counts both live on Result, so accumulate them
+        // per registration in a single pass to avoid an inner scan per driver.
+        var statsByRegistration = _results.GetAll()
             .GroupBy(r => r.RegistrationId)
-            .ToDictionary(g => g.Key, g => g.Sum(r => r.IncidentPoints));
+            .ToDictionary(
+                g => g.Key,
+                g => (Incidents: g.Sum(r => r.IncidentPoints), RacesCompleted: g.Count()));
 
         return _registrations.GetAll()
             .Where(r => r.LeagueId == leagueId)
             .OrderByDescending(r => r.Points)
-            .ThenBy(r => incidentsByRegistration.TryGetValue(r.RegistrationId, out int inc) ? inc : 0)
+            .ThenBy(r => statsByRegistration.TryGetValue(r.RegistrationId, out var s) ? s.Incidents : 0)
+            .Select(r => new StandingEntry(
+                r,
+                statsByRegistration.TryGetValue(r.RegistrationId, out var s) ? s.RacesCompleted : 0))
             .ToList();
     }
 }

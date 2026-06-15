@@ -87,7 +87,7 @@ public class RacesController : ControllerBase
                 return Forbid();
 
             var race = _service.Create(
-                leagueId, dto.Track, dto.Car, dto.ScheduledAt, dto.LapCount, dto.AmbientTempC, dto.Round);
+                leagueId, dto.Track, dto.Car, dto.ScheduledAt, dto.LapCount, dto.AmbientTempC);
 
             return CreatedAtAction(nameof(Get), new { id = race.RaceId }, RaceReadDTO.FromEntity(race));
         }
@@ -121,7 +121,7 @@ public class RacesController : ControllerBase
             race.ScheduledAt = dto.ScheduledAt;
             race.LapCount = dto.LapCount;
             race.AmbientTempC = dto.AmbientTempC;
-            race.Round = dto.Round;
+            // Round is derived from schedule order, not client-supplied; left untouched here.
             race.IsCompleted = dto.IsCompleted;
 
             _service.Update(race);

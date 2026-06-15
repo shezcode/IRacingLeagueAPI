@@ -4,6 +4,10 @@ namespace IRacingLeague.Models.Dtos;
 
 public class RegistrationCreateDTO
 {
+    // Optional target driver. Omitted (or equal to the caller) = self-registration.
+    // Registering a different driver is restricted to the league owner ("Add driver").
+    public int? UserId { get; set; }
+
     [Range(0, 999)]
     public int CarNumber { get; set; }
 

@@ -18,7 +18,4 @@ public class RaceCreateDTO
 
     [Range(-20, 60)]
     public decimal AmbientTempC { get; set; }
-
-    [Range(1, 100)]
-    public int Round { get; set; }
 }

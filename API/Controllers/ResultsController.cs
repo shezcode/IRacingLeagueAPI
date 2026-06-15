@@ -72,6 +72,11 @@ public class ResultsController : ControllerBase
 
             var registration = _registrations.GetById(dto.RegistrationId);  // 404 if missing
 
+            // The registration must belong to the same league as the race; otherwise a
+            // driver from another league could be scored here. Abort without persisting.
+            if (registration.LeagueId != race.LeagueId)
+                return BadRequest("Registration does not belong to this race's league.");
+
             var result = new Result(
                 registration.RegistrationId, race.RaceId, dto.Position,
                 dto.FastestLapSeconds, dto.Points, dto.IncidentPoints, dto.Dnf, dto.Notes);
@@ -105,15 +110,21 @@ public class ResultsController : ControllerBase
             if (!_auth.HasAccessToResource(league.OwnerUserId, User))
                 return Forbid();
 
-            result.RegistrationId = dto.RegistrationId;
-            result.Position = dto.Position;
-            result.FastestLapSeconds = dto.FastestLapSeconds;
-            result.Points = dto.Points;
-            result.IncidentPoints = dto.IncidentPoints;
-            result.Dnf = dto.Dnf;
-            result.Notes = dto.Notes;
+            // A result edit stays with its original driver. Reassigning to another
+            // registration would touch two drivers' stats — that's a delete + re-create,
+            // not an edit — so it's rejected here.
+            if (dto.RegistrationId != result.RegistrationId)
+                return BadRequest("Cannot reassign a result to a different registration.");
 
-            _results.Update(result);
+            var registration = _registrations.GetById(result.RegistrationId);
+
+            // Route through ApplyResult so the previous points/iRating/SR/wins contribution
+            // is backed out and the new values applied — keeping standings and stats in sync.
+            var updated = new Result(
+                registration.RegistrationId, race.RaceId, dto.Position,
+                dto.FastestLapSeconds, dto.Points, dto.IncidentPoints, dto.Dnf, dto.Notes);
+
+            _results.ApplyResult(registration, race, updated);
             return NoContent();
         }
         catch (KeyNotFoundException)

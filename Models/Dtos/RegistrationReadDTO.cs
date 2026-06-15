@@ -11,8 +11,9 @@ public class RegistrationReadDTO
     public decimal BallastKg { get; set; }
     public bool IsActive { get; set; }
     public DateTime JoinedLeagueAt { get; set; }
+    public int RacesCompleted { get; set; }
 
-    public static RegistrationReadDTO FromEntity(Registration r) => new()
+    public static RegistrationReadDTO FromEntity(Registration r, int racesCompleted = 0) => new()
     {
         RegistrationId = r.RegistrationId,
         UserId = r.UserId,
@@ -22,6 +23,7 @@ public class RegistrationReadDTO
         Points = r.Points,
         BallastKg = r.BallastKg,
         IsActive = r.IsActive,
-        JoinedLeagueAt = r.JoinedLeagueAt
+        JoinedLeagueAt = r.JoinedLeagueAt,
+        RacesCompleted = racesCompleted
     };
 }
