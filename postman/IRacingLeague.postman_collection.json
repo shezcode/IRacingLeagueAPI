@@ -1,0 +1,425 @@
+{
+  "info": {
+    "_postman_id": "1ace1ace-dwe2-4a2b-9c0d-1acceee10001",
+    "name": "iRacing League API (DWES2)",
+    "description": "End-to-end collection for the DWES2 API: register/login (token captured into a collection variable) and full CRUD for every controller. Requests chain via collection variables (token, leagueId, raceId, registrationId, resultId, userId) populated by test scripts, so running the folders top-to-bottom drives the whole flow. Set {{baseUrl}} to your API (default http://localhost:8009).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8009" },
+    { "key": "token", "value": "" },
+    { "key": "userId", "value": "" },
+    { "key": "leagueId", "value": "" },
+    { "key": "raceId", "value": "" },
+    { "key": "registrationId", "value": "" },
+    { "key": "resultId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/auth/register", "host": ["{{baseUrl}}"], "path": ["auth", "register"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userName\": \"postmanDriver\",\n  \"email\": \"postman@test.com\",\n  \"password\": \"postmanpass1\",\n  \"tag\": \"PM\",\n  \"licenseClass\": \"A\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Register returns 200 with a token (or 409 if the email already exists).",
+                  "if (pm.response.code === 200) {",
+                  "  const token = pm.response.json().token;",
+                  "  pm.collectionVariables.set('token', token);",
+                  "  // Decode the JWT payload to capture our own user id (the NameIdentifier claim).",
+                  "  const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
+                  "  pm.collectionVariables.set('userId', payload.nameid);",
+                  "  pm.test('register returns a token', () => pm.expect(token).to.be.a('string').and.not.empty);",
+                  "} else {",
+                  "  pm.test('register: email already taken (run Login instead)', () => pm.expect(pm.response.code).to.eql(409));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"postman@test.com\",\n  \"password\": \"postmanpass1\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('login returns 200', () => pm.response.to.have.status(200));",
+                  "const token = pm.response.json().token;",
+                  "pm.collectionVariables.set('token', token);",
+                  "const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
+                  "pm.collectionVariables.set('userId', payload.nameid);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Leagues",
+      "item": [
+        {
+          "name": "Create league",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/leagues", "host": ["{{baseUrl}}"], "path": ["leagues"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Postman Cup\",\n  \"discipline\": \"GT3\",\n  \"isPublic\": true,\n  \"maxDrivers\": 12,\n  \"entryFee\": 0\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('league created (201)', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('leagueId', pm.response.json().leagueId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List public leagues (filter + sort)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/leagues?discipline=GT3&sortBy=name&desc=false",
+              "host": ["{{baseUrl}}"],
+              "path": ["leagues"],
+              "query": [
+                { "key": "discipline", "value": "GT3" },
+                { "key": "sortBy", "value": "name" },
+                { "key": "desc", "value": "false" }
+              ]
+            }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200', () => pm.response.to.have.status(200));"] } }
+          ]
+        },
+        {
+          "name": "Get league by id",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/leagues/{{leagueId}}", "host": ["{{baseUrl}}"], "path": ["leagues", "{{leagueId}}"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200', () => pm.response.to.have.status(200));"] } }
+          ]
+        },
+        {
+          "name": "Update league",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/leagues/{{leagueId}}", "host": ["{{baseUrl}}"], "path": ["leagues", "{{leagueId}}"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Postman Cup (edited)\",\n  \"discipline\": \"GT3\",\n  \"isPublic\": true,\n  \"maxDrivers\": 16,\n  \"entryFee\": 10\n}"
+            }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('204', () => pm.response.to.have.status(204));"] } }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Races",
+      "item": [
+        {
+          "name": "Schedule race",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/leagues/{{leagueId}}/races", "host": ["{{baseUrl}}"], "path": ["leagues", "{{leagueId}}", "races"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"track\": \"Spa\",\n  \"car\": \"Ferrari 296 GT3\",\n  \"scheduledAt\": \"2026-07-01T18:00:00\",\n  \"lapCount\": 20,\n  \"ambientTempC\": 24.5,\n  \"round\": 1\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('race created (201)', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('raceId', pm.response.json().raceId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List league races (filter + sort)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/leagues/{{leagueId}}/races?track=Spa&sortBy=round",
+              "host": ["{{baseUrl}}"],
+              "path": ["leagues", "{{leagueId}}", "races"],
+              "query": [
+                { "key": "track", "value": "Spa" },
+                { "key": "sortBy", "value": "round" }
+              ]
+            }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200', () => pm.response.to.have.status(200));"] } }
+          ]
+        },
+        {
+          "name": "Get race by id",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/races/{{raceId}}", "host": ["{{baseUrl}}"], "path": ["races", "{{raceId}}"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200', () => pm.response.to.have.status(200));"] } }
+          ]
+        },
+        {
+          "name": "Update race",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/races/{{raceId}}", "host": ["{{baseUrl}}"], "path": ["races", "{{raceId}}"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"track\": \"Spa\",\n  \"car\": \"Ferrari 296 GT3\",\n  \"scheduledAt\": \"2026-07-01T18:00:00\",\n  \"lapCount\": 25,\n  \"ambientTempC\": 22.0,\n  \"round\": 1,\n  \"isCompleted\": true\n}"
+            }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('204', () => pm.response.to.have.status(204));"] } }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Registrations",
+      "item": [
+        {
+          "name": "Join league (as caller)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/leagues/{{leagueId}}/registrations", "host": ["{{baseUrl}}"], "path": ["leagues", "{{leagueId}}", "registrations"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"carNumber\": 7,\n  \"teamName\": \"Postman Racing\",\n  \"ballastKg\": 0\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('registration created (201)', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('registrationId', pm.response.json().registrationId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Standings",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/leagues/{{leagueId}}/registrations", "host": ["{{baseUrl}}"], "path": ["leagues", "{{leagueId}}", "registrations"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200', () => pm.response.to.have.status(200));"] } }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Results",
+      "item": [
+        {
+          "name": "Enter result (ApplyResult)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/races/{{raceId}}/results", "host": ["{{baseUrl}}"], "path": ["races", "{{raceId}}", "results"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"registrationId\": {{registrationId}},\n  \"position\": 1,\n  \"fastestLapSeconds\": 104.321,\n  \"points\": 25,\n  \"incidentPoints\": 2,\n  \"dnf\": false,\n  \"notes\": \"pole-to-flag\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('result created (201)', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('resultId', pm.response.json().resultId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List race results",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/races/{{raceId}}/results", "host": ["{{baseUrl}}"], "path": ["races", "{{raceId}}", "results"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200', () => pm.response.to.have.status(200));"] } }
+          ]
+        },
+        {
+          "name": "Correct result",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/results/{{resultId}}", "host": ["{{baseUrl}}"], "path": ["results", "{{resultId}}"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"registrationId\": {{registrationId}},\n  \"position\": 1,\n  \"fastestLapSeconds\": 104.0,\n  \"points\": 25,\n  \"incidentPoints\": 1,\n  \"dnf\": false,\n  \"notes\": \"corrected\"\n}"
+            }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('204', () => pm.response.to.have.status(204));"] } }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "List drivers (filter + sort)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/users?minIRating=1000&licenseClass=A&sortBy=irating&desc=true",
+              "host": ["{{baseUrl}}"],
+              "path": ["users"],
+              "query": [
+                { "key": "minIRating", "value": "1000" },
+                { "key": "licenseClass", "value": "A" },
+                { "key": "sortBy", "value": "irating" },
+                { "key": "desc", "value": "true" }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('no password field is exposed', () => pm.expect(pm.response.text()).to.not.include('password'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get driver profile",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/users/{{userId}}", "host": ["{{baseUrl}}"], "path": ["users", "{{userId}}"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200', () => pm.response.to.have.status(200));"] } }
+          ]
+        },
+        {
+          "name": "Update own profile",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/users/{{userId}}", "host": ["{{baseUrl}}"], "path": ["users", "{{userId}}"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userName\": \"postmanDriver\",\n  \"tag\": \"PMX\",\n  \"licenseClass\": \"A\"\n}"
+            }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('204', () => pm.response.to.have.status(204));"] } }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Cleanup",
+      "item": [
+        {
+          "name": "Delete registration",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{baseUrl}}/registrations/{{registrationId}}", "host": ["{{baseUrl}}"], "path": ["registrations", "{{registrationId}}"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('204 or 409 (if results recorded)', () => pm.expect(pm.response.code).to.be.oneOf([204, 409]));"] } }
+          ]
+        },
+        {
+          "name": "Delete race",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{baseUrl}}/races/{{raceId}}", "host": ["{{baseUrl}}"], "path": ["races", "{{raceId}}"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('204 or 409 (if results recorded)', () => pm.expect(pm.response.code).to.be.oneOf([204, 409]));"] } }
+          ]
+        },
+        {
+          "name": "Delete league",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{baseUrl}}/leagues/{{leagueId}}", "host": ["{{baseUrl}}"], "path": ["leagues", "{{leagueId}}"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('204 or 409 (clear children first)', () => pm.expect(pm.response.code).to.be.oneOf([204, 409]));"] } }
+          ]
+        }
+      ]
+    }
+  ]
+}
