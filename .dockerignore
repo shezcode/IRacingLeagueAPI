@@ -1,0 +1,7 @@
+# Keep build artifacts and IDE/git noise out of the build context so the SDK stage
+# restores cleanly and the image stays small.
+**/bin
+**/obj
+**/.vs
+**/.git
+**/*.user
