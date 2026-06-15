@@ -15,7 +15,9 @@ public class UserService : IUserService
 
     public User Create(string userName, string email, string password, string role, string tag, string licenseClass)
     {
-        var user = new User(userName, email, password, role, tag, licenseClass);
+        // Persist the hash, never the raw password, so the account can authenticate
+        // against AuthService.Login (which compares hashes).
+        var user = new User(userName, email, PasswordHasher.Hash(password), role, tag, licenseClass);
         _repository.Add(user);
         _repository.SaveChanges();
         return user;

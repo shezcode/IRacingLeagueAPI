@@ -15,7 +15,9 @@ public class Race
     // Parameterless ctor kept for JSON (de)serialization in a later step.
     public Race() { }
 
-    public Race(int leagueId, string track, string car, DateTime scheduledAt, int lapCount, decimal ambientTempC, int round)
+    // Round is intentionally not a constructor parameter: it is derived from schedule
+    // order and assigned by the race service after every create/delete, never set by callers.
+    public Race(int leagueId, string track, string car, DateTime scheduledAt, int lapCount, decimal ambientTempC)
     {
         LeagueId = leagueId;
         Track = track;
@@ -23,7 +25,6 @@ public class Race
         ScheduledAt = scheduledAt;
         LapCount = lapCount;
         AmbientTempC = ambientTempC;
-        Round = round;
         IsCompleted = false;
     }
 

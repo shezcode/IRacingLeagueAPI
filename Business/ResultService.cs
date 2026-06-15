@@ -18,21 +18,52 @@ public class ResultService : IResultService
 
     public Result ApplyResult(Registration registration, Race race, Result result)
     {
-        // 1. Persist the result, bound to its registration and race.
-        result.RegistrationId = registration.RegistrationId;
-        result.RaceId = race.RaceId;
-        _results.Add(result);
+        var user = _users.Get(registration.UserId)
+            ?? throw new KeyNotFoundException($"User with id {registration.UserId} not found.");
+
+        // At most one result per driver per race: re-entering updates in place
+        // instead of inserting a duplicate that would double-count points and stats.
+        var existingId = _results.GetAll()
+            .FirstOrDefault(r => r.RegistrationId == registration.RegistrationId && r.RaceId == race.RaceId)
+            ?.ResultId;
+
+        if (existingId is not null)
+        {
+            // Re-fetch tracked (Find) so a result the caller already loaded resolves to the
+            // same instance rather than a second copy that would collide on its key.
+            var existing = _results.Get(existingId.Value)!;
+
+            // Back out the previous contribution before applying the new values.
+            registration.AddPoints(result.Points - existing.Points);
+            user.UndoRaceOutcome(existing.Position, existing.IncidentPoints);
+            user.ApplyRaceOutcome(result.Position, result.IncidentPoints);
+
+            // Overwrite the existing row in place.
+            existing.Position = result.Position;
+            existing.FastestLapSeconds = result.FastestLapSeconds;
+            existing.Points = result.Points;
+            existing.IncidentPoints = result.IncidentPoints;
+            existing.Dnf = result.Dnf;
+            existing.Notes = result.Notes;
+            existing.FinishedAt = result.FinishedAt;
+            _results.Update(existing);
+            result = existing;
+        }
+        else
+        {
+            // First result for this driver/race: persist it and apply the contribution.
+            result.RegistrationId = registration.RegistrationId;
+            result.RaceId = race.RaceId;
+            _results.Add(result);
+
+            registration.AddPoints(result.Points);
+            user.ApplyRaceOutcome(result.Position, result.IncidentPoints);
+        }
         _results.SaveChanges();
 
-        // 2. Add the race points to this league standing.
-        registration.AddPoints(result.Points);
         _registrations.Update(registration);
         _registrations.SaveChanges();
 
-        // 3. Recompute the owning user's global stats.
-        var user = _users.Get(registration.UserId)
-            ?? throw new KeyNotFoundException($"User with id {registration.UserId} not found.");
-        user.ApplyRaceOutcome(result.Position, result.IncidentPoints);
         _users.Update(user);
         _users.SaveChanges();
 
@@ -48,14 +79,5 @@ public class ResultService : IResultService
         if (result == null)
             throw new KeyNotFoundException($"Result with id {id} not found.");
         return result;
-    }
-
-    // Field-level correction only, see IResultService.Update for the standings caveat.
-    public void Update(Result result)
-    {
-        if (_results.Get(result.ResultId) == null)
-            throw new KeyNotFoundException($"Result with id {result.ResultId} not found.");
-        _results.Update(result);
-        _results.SaveChanges();
     }
 }
