@@ -1,6 +1,5 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using System.Security.Cryptography;
 using System.Text;
 using IRacingLeague.Data;
 using IRacingLeague.Models;
@@ -75,11 +74,7 @@ public class AuthService : IAuthService
         return handler.WriteToken(handler.CreateToken(tokenDescriptor));
     }
 
-    public string HashPassword(string password)
-    {
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(password));
-        return Convert.ToHexString(bytes).ToLowerInvariant();
-    }
+    public string HashPassword(string password) => PasswordHasher.Hash(password);
 
     public int? GetUserId(ClaimsPrincipal user)
     {

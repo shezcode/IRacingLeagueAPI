@@ -38,7 +38,8 @@ public class RegistrationsController : ControllerBase
             if (!_viewPolicy.CanView(league, User))
                 return Forbid();
 
-            var standings = _standings.GetStandings(leagueId).Select(RegistrationReadDTO.FromEntity);
+            var standings = _standings.GetStandings(leagueId)
+                .Select(e => RegistrationReadDTO.FromEntity(e.Registration, e.RacesCompleted));
             return Ok(standings);
         }
         catch (KeyNotFoundException)
@@ -65,8 +66,18 @@ public class RegistrationsController : ControllerBase
 
         try
         {
+            var targetUserId = dto.UserId ?? callerId.Value;
+
+            // Registering a driver other than yourself is restricted to the league owner.
+            if (targetUserId != callerId.Value)
+            {
+                var league = _leagues.GetById(leagueId);   // 404 if the league is missing
+                if (!_auth.HasAccessToResource(league.OwnerUserId, User))
+                    return Forbid();
+            }
+
             var registration = _service.Register(
-                callerId.Value, leagueId, dto.CarNumber, dto.TeamName, dto.BallastKg);
+                targetUserId, leagueId, dto.CarNumber, dto.TeamName, dto.BallastKg);
 
             return CreatedAtAction(
                 nameof(GetStandings), new { leagueId }, RegistrationReadDTO.FromEntity(registration));

@@ -15,14 +15,16 @@ public class RaceService : IRaceService
         _leagues = leagues;
     }
 
-    public Race Create(int leagueId, string track, string car, DateTime scheduledAt, int lapCount, decimal ambientTempC, int round)
+    public Race Create(int leagueId, string track, string car, DateTime scheduledAt, int lapCount, decimal ambientTempC)
     {
         if (_leagues.Get(leagueId) == null)
             throw new KeyNotFoundException($"League with id {leagueId} not found.");
 
-        var race = new Race(leagueId, track, car, scheduledAt, lapCount, ambientTempC, round);
+        var race = new Race(leagueId, track, car, scheduledAt, lapCount, ambientTempC);
         _races.Add(race);
-        _races.SaveChanges();
+        _races.SaveChanges();       // populates race.RaceId
+
+        RenumberRounds(leagueId);   // assign Round from schedule order, including the new race
         return race;
     }
 
@@ -65,13 +67,51 @@ public class RaceService : IRaceService
             throw new KeyNotFoundException($"Race with id {race.RaceId} not found.");
         _races.Update(race);
         _races.SaveChanges();
+
+        // ScheduledAt may have changed, which reorders the league's schedule, so
+        // re-derive rounds. Idempotent when the order is unchanged.
+        RenumberRounds(race.LeagueId);
     }
 
     public void Delete(int id)
     {
-        if (_races.Get(id) == null)
+        var race = _races.Get(id);
+        if (race == null)
             throw new KeyNotFoundException($"Race with id {id} not found.");
+
+        var leagueId = race.LeagueId;
         _races.Delete(id);
+        _races.SaveChanges();
+
+        RenumberRounds(leagueId);   // close the gap left by the removed race
+    }
+
+    // Rounds are derived, never user-entered: order a league's races by ScheduledAt
+    // (ties broken by RaceId) and assign Round = 1, 2, 3, ... contiguously.
+    // Runs after every create/delete so Round stays contiguous and unique per league.
+    private void RenumberRounds(int leagueId)
+    {
+        var orderedIds = _races.GetAll()
+            .Where(r => r.LeagueId == leagueId)
+            .OrderBy(r => r.ScheduledAt)
+            .ThenBy(r => r.RaceId)
+            .Select(r => r.RaceId)
+            .ToList();
+
+        var round = 1;
+        foreach (var raceId in orderedIds)
+        {
+            // Fetch tracked (Find) so the just-added race resolves to the same instance
+            // rather than a second copy that would collide on its key.
+            var race = _races.Get(raceId);
+            if (race is not null && race.Round != round)
+            {
+                race.Round = round;
+                _races.Update(race);
+            }
+            round++;
+        }
+
         _races.SaveChanges();
     }
 }

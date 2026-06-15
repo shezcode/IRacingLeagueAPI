@@ -46,6 +46,21 @@ public class User
         if (SafetyRating > 4.99m) SafetyRating = 4.99m;
     }
 
+    // Exact inverse of ApplyRaceOutcome, used when a result is re-entered so the
+    // previous contribution can be backed out before the new one is applied.
+    public void UndoRaceOutcome(int position, int incidentPoints)
+    {
+        int iRatingDelta = Math.Max(50 - (position - 1) * 10, -30);
+        IRating -= iRatingDelta;
+
+        if (position == 1)
+            TotalWins--;
+
+        SafetyRating += incidentPoints * 0.05m;
+        if (SafetyRating < 0m) SafetyRating = 0m;
+        if (SafetyRating > 4.99m) SafetyRating = 4.99m;
+    }
+
     public override string ToString() =>
         $"[{UserId}] {UserName} ({Tag}) — {Role}, license {LicenseClass}, " +
         $"iR {IRating}, SR {SafetyRating:0.00}, wins {TotalWins}";

@@ -9,6 +9,4 @@ public interface IResultService
     IEnumerable<Result> GetByRace(int raceId);
 
     Result GetById(int id);
-
-    void Update(Result result);
 }
