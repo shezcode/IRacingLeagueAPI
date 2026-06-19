@@ -1,8 +1,9 @@
 namespace IRacingLeague.Models;
 
-public static class Roles
+public enum Roles
 {
-    public const string Admin = "Admin";
-    public const string Driver = "Driver";
-    public const string Guest = "Guest";
+    Admin,
+    Driver,
+    Guest
 }
+

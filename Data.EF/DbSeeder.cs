@@ -11,32 +11,32 @@ public static class DbSeeder
         if (context.Users.Any())
             return;
 
-        var admin = new User("admin", "admin@iracingleague.com", PasswordHasher.Hash("Admin123!"), Roles.Admin, "ADM", "A")
+        var admin = new User("admin", "admin@iracingleague.com", PasswordHasher.Hash("Admin123!"), nameof(Roles.Admin), "ADM", "A")
         {
             IRating = 5000,
             SafetyRating = 4.99m
         };
-        var max = new User("Max Verstappen", "max@example.com", PasswordHasher.Hash("Driver123!"), Roles.Driver, "VER", "A")
+        var max = new User("Max Verstappen", "max@example.com", PasswordHasher.Hash("Driver123!"), nameof(Roles.Driver), "VER", "A")
         {
             IRating = 4200,
             SafetyRating = 4.20m
         };
-        var lewis = new User("Lewis Hamilton", "lewis@example.com", PasswordHasher.Hash("Driver123!"), Roles.Driver, "HAM", "A")
+        var lewis = new User("Lewis Hamilton", "lewis@example.com", PasswordHasher.Hash("Driver123!"), nameof(Roles.Driver), "HAM", "A")
         {
             IRating = 4100,
             SafetyRating = 4.50m
         };
-        var charles = new User("Charles Leclerc", "charles@example.com", PasswordHasher.Hash("Driver123!"), Roles.Driver, "LEC", "B")
+        var charles = new User("Charles Leclerc", "charles@example.com", PasswordHasher.Hash("Driver123!"), nameof(Roles.Driver), "LEC", "B")
         {
             IRating = 3500,
             SafetyRating = 3.80m
         };
-        var lando = new User("Lando Norris", "lando@example.com", PasswordHasher.Hash("Driver123!"), Roles.Driver, "NOR", "B")
+        var lando = new User("Lando Norris", "lando@example.com", PasswordHasher.Hash("Driver123!"), nameof(Roles.Driver), "NOR", "B")
         {
             IRating = 3300,
             SafetyRating = 4.10m
         };
-        var george = new User("George Russell", "george@example.com", PasswordHasher.Hash("Driver123!"), Roles.Driver, "RUS", "C")
+        var george = new User("George Russell", "george@example.com", PasswordHasher.Hash("Driver123!"), nameof(Roles.Driver), "RUS", "C")
         {
             IRating = 2800,
             SafetyRating = 3.95m
@@ -60,11 +60,14 @@ public static class DbSeeder
         context.Registrations.AddRange(regMax, regLewis, regCharles, regLando, regGeorge);
 
         var raceSpa = new Race(gt3League.LeagueId, "Spa-Francorchamps", "Mercedes AMG GT3",
-            new DateTime(2026, 5, 3, 18, 0, 0), 20, 18.5m) { Round = 1, IsCompleted = true };
+            new DateTime(2026, 5, 3, 18, 0, 0), 20, 18.5m)
+        { Round = 1, IsCompleted = true };
         var raceNurburgring = new Race(gt3League.LeagueId, "Nurburgring GP", "Ferrari 296 GT3",
-            new DateTime(2026, 5, 17, 18, 0, 0), 25, 22.0m) { Round = 2, IsCompleted = true };
+            new DateTime(2026, 5, 17, 18, 0, 0), 25, 22.0m)
+        { Round = 2, IsCompleted = true };
         var raceMonza = new Race(gt3League.LeagueId, "Monza", "McLaren 720S GT3",
-            new DateTime(2026, 7, 12, 18, 0, 0), 22, 26.0m) { Round = 3 };
+            new DateTime(2026, 7, 12, 18, 0, 0), 22, 26.0m)
+        { Round = 3 };
 
         context.Races.AddRange(raceSpa, raceNurburgring, raceMonza);
         context.SaveChanges();

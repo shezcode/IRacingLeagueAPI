@@ -7,10 +7,14 @@ namespace IRacingLeague.Business;
 public class UserService : IUserService
 {
     private readonly IUserRepository _repository;
+    private readonly ILeagueRepository _leagues;
+    private readonly IRegistrationService _registrations;
 
-    public UserService(IUserRepository repository)
+    public UserService(IUserRepository repository, ILeagueRepository leagues, IRegistrationService registrations)
     {
         _repository = repository;
+        _leagues = leagues;
+        _registrations = registrations;
     }
 
     public User Create(string userName, string email, string password, string role, string tag, string licenseClass)
@@ -71,6 +75,19 @@ public class UserService : IUserService
     {
         if (_repository.Get(id) == null)
             throw new KeyNotFoundException($"User with id {id} not found.");
+
+        // Owned leagues hold other drivers' registrations and results, so we never wipe them
+        // as a side effect of deleting their owner. Refuse until the admin clears them first.
+        var ownedCount = _leagues.GetAll().Count(l => l.OwnerUserId == id);
+        if (ownedCount > 0)
+            throw new UserOwnsLeaguesException(
+                $"User #{id} still owns {ownedCount} league(s). Delete or reassign them before deleting the user.");
+
+        // Cascade the user's own race entries (and their results, reversing stat contributions);
+        // the FK is Restrict, so the user row can only go once these are cleared.
+        foreach (var registration in _registrations.GetByUser(id).ToList())
+            _registrations.Delete(registration.RegistrationId);
+
         _repository.Delete(id);
         _repository.SaveChanges();
     }

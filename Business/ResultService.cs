@@ -80,4 +80,51 @@ public class ResultService : IResultService
             throw new KeyNotFoundException($"Result with id {id} not found.");
         return result;
     }
+
+    public void Delete(int id)
+    {
+        var result = _results.Get(id)
+            ?? throw new KeyNotFoundException($"Result with id {id} not found.");
+        BackOut(result);
+        _results.SaveChanges();
+    }
+
+    public void DeleteForRace(int raceId)
+    {
+        var results = _results.GetAll().Where(r => r.RaceId == raceId).ToList();
+        foreach (var result in results)
+            BackOut(result);
+        _results.SaveChanges();   // shared DbContext: one flush persists every back-out and removal
+    }
+
+    public void DeleteForRegistration(int registrationId)
+    {
+        var results = _results.GetAll().Where(r => r.RegistrationId == registrationId).ToList();
+        foreach (var result in results)
+            BackOut(result);
+        _results.SaveChanges();
+    }
+
+    // Exact inverse of ApplyResult's first-application path: undo the points/iRating/SR/wins
+    // contribution this result made, then remove the row. The tracked registration and user
+    // (fetched via Get/Find) accumulate correctly when several results share them, so a whole
+    // race or registration can be backed out in one pass.
+    private void BackOut(Result result)
+    {
+        var registration = _registrations.Get(result.RegistrationId);
+        if (registration is not null)
+        {
+            registration.AddPoints(-result.Points);
+            _registrations.Update(registration);
+
+            var user = _users.Get(registration.UserId);
+            if (user is not null)
+            {
+                user.UndoRaceOutcome(result.Position, result.IncidentPoints);
+                _users.Update(user);
+            }
+        }
+
+        _results.Delete(result.ResultId);
+    }
 }

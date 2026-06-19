@@ -65,7 +65,7 @@ public class LeaguesController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Roles = $"{Roles.Driver},{Roles.Admin}")]
+    [Authorize(Roles = $"{nameof(Roles.Driver)},{nameof(Roles.Admin)}")]
     public ActionResult<LeagueReadDTO> Create([FromBody] LeagueCreateDTO dto)
     {
         if (!ModelState.IsValid)
@@ -141,7 +141,9 @@ public class LeaguesController : ControllerBase
         }
         catch (DbUpdateException)
         {
-            // FK is Restrict (AppDbContext): a league with registrations or races can't be removed until those children are cleared. 
+            // Defensive fallback: the service cascades registrations, races, and their results
+            // before removing the league, so the Restrict FK shouldn't trip — but surface a 409
+            // rather than a 500 if it does.
             return Conflict("Cannot delete a league that still has registrations or races.");
         }
         catch (Exception ex)

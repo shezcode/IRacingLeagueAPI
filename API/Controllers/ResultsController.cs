@@ -137,4 +137,32 @@ public class ResultsController : ControllerBase
             return StatusCode(StatusCodes.Status500InternalServerError);
         }
     }
+
+    [HttpDelete("results/{id}")]
+    [Authorize]
+    public IActionResult Delete(int id)
+    {
+        try
+        {
+            var result = _results.GetById(id);          // 404 if missing
+            var race = _races.GetById(result.RaceId);
+            var league = _leagues.GetById(race.LeagueId);
+            if (!_auth.HasAccessToResource(league.OwnerUserId, User))
+                return Forbid();
+
+            // Backs out the result's points/iRating/SR/wins contribution before removing it,
+            // keeping standings and global driver stats in sync.
+            _results.Delete(id);
+            return NoContent();
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to delete result {ResultId}", id);
+            return StatusCode(StatusCodes.Status500InternalServerError);
+        }
+    }
 }

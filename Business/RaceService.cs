@@ -8,11 +8,13 @@ public class RaceService : IRaceService
 {
     private readonly IRaceRepository _races;
     private readonly ILeagueRepository _leagues;
+    private readonly IResultService _results;
 
-    public RaceService(IRaceRepository races, ILeagueRepository leagues)
+    public RaceService(IRaceRepository races, ILeagueRepository leagues, IResultService results)
     {
         _races = races;
         _leagues = leagues;
+        _results = results;
     }
 
     public Race Create(int leagueId, string track, string car, DateTime scheduledAt, int lapCount, decimal ambientTempC)
@@ -80,6 +82,11 @@ public class RaceService : IRaceService
             throw new KeyNotFoundException($"Race with id {id} not found.");
 
         var leagueId = race.LeagueId;
+
+        // Clear recorded results first (reversing their stat contributions); the FK is
+        // Restrict, so the race row can only be removed once it has no results.
+        _results.DeleteForRace(id);
+
         _races.Delete(id);
         _races.SaveChanges();
 

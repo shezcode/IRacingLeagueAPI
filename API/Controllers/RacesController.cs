@@ -158,7 +158,8 @@ public class RacesController : ControllerBase
         }
         catch (DbUpdateException)
         {
-            // FK is Restrict (AppDbContext): a race with recorded results can't be removed until those results are cleared. 
+            // Defensive fallback: the service cascades a race's results before removing it, so
+            // the Restrict FK shouldn't trip — but surface a 409 rather than a 500 if it does.
             return Conflict("Cannot delete a race that has recorded results.");
         }
         catch (Exception ex)

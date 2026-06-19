@@ -7,11 +7,13 @@ public class RegistrationService : IRegistrationService
 {
     private readonly IRegistrationRepository _registrations;
     private readonly ILeagueRepository _leagues;
+    private readonly IResultService _results;
 
-    public RegistrationService(IRegistrationRepository registrations, ILeagueRepository leagues)
+    public RegistrationService(IRegistrationRepository registrations, ILeagueRepository leagues, IResultService results)
     {
         _registrations = registrations;
         _leagues = leagues;
+        _results = results;
     }
 
     public Registration Register(int userId, int leagueId, int carNumber, string teamName, decimal ballastKg)
@@ -54,6 +56,11 @@ public class RegistrationService : IRegistrationService
     {
         if (_registrations.Get(id) == null)
             throw new KeyNotFoundException($"Registration with id {id} not found.");
+
+        // Clear this membership's recorded results first (reversing their stat
+        // contributions); the FK is Restrict, so the row can only go once results are gone.
+        _results.DeleteForRegistration(id);
+
         _registrations.Delete(id);
         _registrations.SaveChanges();
     }

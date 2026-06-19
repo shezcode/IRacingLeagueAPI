@@ -7,10 +7,14 @@ namespace IRacingLeague.Business;
 public class LeagueService : ILeagueService
 {
     private readonly ILeagueRepository _repository;
+    private readonly IRegistrationService _registrations;
+    private readonly IRaceService _races;
 
-    public LeagueService(ILeagueRepository repository)
+    public LeagueService(ILeagueRepository repository, IRegistrationService registrations, IRaceService races)
     {
         _repository = repository;
+        _registrations = registrations;
+        _races = races;
     }
 
     public League Create(string name, string discipline, bool isPublic, int maxDrivers, decimal entryFee, int ownerUserId = 0)
@@ -77,6 +81,17 @@ public class LeagueService : ILeagueService
     {
         if (_repository.Get(id) == null)
             throw new KeyNotFoundException($"League with id {id} not found.");
+
+        // Cascade through the lower-level deletes so each registration's and race's results
+        // are removed (reversing their stat contributions) before the league itself goes.
+        // Registrations first: that clears every result in the league, so the race deletes
+        // below find none left. FKs are Restrict, so children must be gone before the parent.
+        foreach (var registration in _registrations.GetByLeague(id).ToList())
+            _registrations.Delete(registration.RegistrationId);
+
+        foreach (var race in _races.GetByLeague(id).ToList())
+            _races.Delete(race.RaceId);
+
         _repository.Delete(id);
         _repository.SaveChanges();
     }

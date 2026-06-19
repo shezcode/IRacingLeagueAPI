@@ -1,7 +1,9 @@
 using IRacingLeague.Business;
+using IRacingLeague.Models;
 using IRacingLeague.Models.Dtos;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace IRacingLeague.API.Controllers;
 
@@ -81,6 +83,38 @@ public class UsersController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to update user {UserId}", id);
+            return StatusCode(StatusCodes.Status500InternalServerError);
+        }
+    }
+
+    [HttpDelete("{id}")]
+    [Authorize(Roles = nameof(Roles.Admin))]
+    public IActionResult Delete(int id)
+    {
+        try
+        {
+            // Cascades the user's own registrations (and their results); refuses if the user
+            // still owns any league (UserOwnsLeaguesException -> 409).
+            _service.Delete(id);
+            return NoContent();
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound();
+        }
+        catch (UserOwnsLeaguesException ex)
+        {
+            return Conflict(ex.Message);
+        }
+        catch (DbUpdateException)
+        {
+            // Defensive fallback: the service clears the user's registrations first, so the
+            // Restrict FK shouldn't trip — surface a 409 rather than a 500 if it does.
+            return Conflict("Cannot delete a user that still has related records.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to delete user {UserId}", id);
             return StatusCode(StatusCodes.Status500InternalServerError);
         }
     }

@@ -28,7 +28,7 @@ public class AuthService : IAuthService
             throw new InvalidOperationException($"An account already exists for '{dto.Email}'.");
 
         var user = new User(dto.UserName, dto.Email, HashPassword(dto.Password),
-                            Roles.Driver, dto.Tag, dto.LicenseClass);
+                            Roles.Driver.ToString(), dto.Tag, dto.LicenseClass);
         _users.Add(user);
         _users.SaveChanges();   // populates user.UserId
 
@@ -47,6 +47,8 @@ public class AuthService : IAuthService
 
         return GenerateToken(UserDTOOut.FromEntity(user));
     }
+
+
 
     public string GenerateToken(UserDTOOut user)
     {
@@ -85,7 +87,7 @@ public class AuthService : IAuthService
     public bool HasAccessToResource(int ownerUserId, ClaimsPrincipal user)
     {
         var isOwner = GetUserId(user) == ownerUserId;
-        var isAdmin = user.IsInRole(Roles.Admin);
+        var isAdmin = user.IsInRole(Roles.Admin.ToString());
         return isOwner || isAdmin;
     }
 }
