@@ -7,7 +7,6 @@ public class Registration
     public int LeagueId { get; set; }    // FK -> League
     public int CarNumber { get; set; }
     public string TeamName { get; set; } = string.Empty;
-    public int Points { get; set; }      // standings points in this league
     public decimal BallastKg { get; set; }
     public bool IsActive { get; set; }
     public DateTime JoinedLeagueAt { get; set; }
@@ -22,11 +21,8 @@ public class Registration
         CarNumber = carNumber;
         TeamName = teamName;
         BallastKg = ballastKg;
-        Points = 0;
         IsActive = true;
         JoinedLeagueAt = DateTime.UtcNow;
     }
-
-    public void AddPoints(int points) => Points += points;
 
 }

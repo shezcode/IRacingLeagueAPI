@@ -74,7 +74,8 @@ public sealed class RacesController(IRaceService service, ILeagueService leagues
         var race = await service.GetByIdAsync(id, ct); var league = await leagues.GetByIdAsync(race.LeagueId, ct);
         if (!auth.HasAccessToResource(league.OwnerUserId, User)) throw new ForbiddenException("You do not have access to this resource.");
         if (!Matches(ifMatch, race.Version)) throw new PreconditionFailedException("The If-Match value does not match the current resource version.");
-        race.Track = dto.Track; race.Car = dto.Car; race.ScheduledAt = dto.ScheduledAt; race.LapCount = dto.LapCount; race.AmbientTempC = dto.AmbientTempC; race.IsCompleted = dto.IsCompleted;
+        if (race.IsCompleted && dto.ScheduledAt != race.ScheduledAt) throw new DomainValidationException("A completed race cannot be rescheduled.");
+        race.Track = dto.Track; race.Car = dto.Car; race.ScheduledAt = dto.ScheduledAt; race.LapCount = dto.LapCount; race.AmbientTempC = dto.AmbientTempC;
         await service.UpdateAsync(race, ct); return NoContent();
     }
 

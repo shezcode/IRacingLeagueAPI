@@ -22,12 +22,16 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<Race>().HasKey(r => r.RaceId);
         modelBuilder.Entity<Race>().Property(r => r.Version).HasColumnName("xmin").IsRowVersion();
         modelBuilder.Entity<Result>().HasKey(r => r.ResultId);
+        modelBuilder.Entity<Result>().HasIndex(r => new { r.RaceId, r.RegistrationId }).IsUnique();
+        modelBuilder.Entity<Result>().HasIndex(r => new { r.RaceId, r.Position }).IsUnique();
 
         // --- Constraints ---
         modelBuilder.Entity<User>().HasIndex(u => u.Email).IsUnique();
 
         // Set decimal precision explicitly to keep the schema stable across providers.
         modelBuilder.Entity<League>().Property(l => l.EntryFee).HasPrecision(10, 2);
+        modelBuilder.Entity<League>().Property(l => l.PointsTable).HasDefaultValue("25,18,15,12,10,8,6,4,2,1");
+        modelBuilder.Entity<League>().Property(l => l.FastestLapBonus).HasDefaultValue(1);
         modelBuilder.Entity<User>().Property(u => u.SafetyRating).HasPrecision(4, 2);
         modelBuilder.Entity<Registration>().Property(r => r.BallastKg).HasPrecision(6, 2);
         modelBuilder.Entity<Race>().Property(r => r.AmbientTempC).HasPrecision(5, 2);

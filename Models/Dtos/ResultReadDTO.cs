@@ -7,6 +7,7 @@ public class ResultReadDTO
     public int RaceId { get; set; }
     public int Position { get; set; }
     public decimal FastestLapSeconds { get; set; }
+    public bool FastestLap { get; set; }
     public int Points { get; set; }
     public int IncidentPoints { get; set; }
     public bool Dnf { get; set; }
@@ -20,6 +21,7 @@ public class ResultReadDTO
         RaceId = r.RaceId,
         Position = r.Position,
         FastestLapSeconds = r.FastestLapSeconds,
+        FastestLap = r.FastestLap,
         Points = r.Points,
         IncidentPoints = r.IncidentPoints,
         Dnf = r.Dnf,

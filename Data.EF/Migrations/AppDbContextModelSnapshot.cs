@@ -41,6 +41,11 @@ namespace IRacingLeague.Data.EF.Migrations
                         .HasPrecision(10, 2)
                         .HasColumnType("numeric(10,2)");
 
+                    b.Property<int>("FastestLapBonus")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
                     b.Property<bool>("IsPublic")
                         .HasColumnType("boolean");
 
@@ -53,6 +58,18 @@ namespace IRacingLeague.Data.EF.Migrations
 
                     b.Property<int>("OwnerUserId")
                         .HasColumnType("integer");
+
+                    b.Property<string>("PointsTable")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("25,18,15,12,10,8,6,4,2,1");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
 
                     b.HasKey("LeagueId");
 
@@ -96,6 +113,12 @@ namespace IRacingLeague.Data.EF.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
                     b.HasKey("RaceId");
 
                     b.HasIndex("LeagueId");
@@ -127,9 +150,6 @@ namespace IRacingLeague.Data.EF.Migrations
                     b.Property<int>("LeagueId")
                         .HasColumnType("integer");
 
-                    b.Property<int>("Points")
-                        .HasColumnType("integer");
-
                     b.Property<string>("TeamName")
                         .IsRequired()
                         .HasColumnType("text");
@@ -155,6 +175,9 @@ namespace IRacingLeague.Data.EF.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("ResultId"));
 
                     b.Property<bool>("Dnf")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("FastestLap")
                         .HasColumnType("boolean");
 
                     b.Property<decimal>("FastestLapSeconds")
@@ -185,9 +208,13 @@ namespace IRacingLeague.Data.EF.Migrations
 
                     b.HasKey("ResultId");
 
-                    b.HasIndex("RaceId");
-
                     b.HasIndex("RegistrationId");
+
+                    b.HasIndex("RaceId", "Position")
+                        .IsUnique();
+
+                    b.HasIndex("RaceId", "RegistrationId")
+                        .IsUnique();
 
                     b.ToTable("Results");
                 });
