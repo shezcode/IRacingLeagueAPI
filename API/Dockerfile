@@ -1,4 +1,4 @@
-# Multi-stage build for the DWES2 API.
+# Multi-stage build for the league API.
 # Build context is the solution root (IRacingLeagueApi/) so every referenced project
 # — Models, Data, Data.EF, Business, API — is available to restore/publish.
 

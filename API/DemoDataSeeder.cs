@@ -44,7 +44,8 @@ public sealed class DemoDataSeeder(
             ("Oscar Piastri", "oscar@example.com", "PIA"),
             ("Sergio Perez", "sergio@example.com", "PER"),
             ("Pierre Gasly", "pierre@example.com", "GAS"),
-            ("Yuki Tsunoda", "yuki@example.com", "TSU")
+            ("Yuki Tsunoda", "yuki@example.com", "TSU"),
+            ("Valtteri Bottas", "valtteri@example.com", "BOT")
         };
         var driverUsers = new List<IRacingLeague.Models.User>();
         foreach (var driver in drivers)

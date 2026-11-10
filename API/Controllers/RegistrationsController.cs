@@ -68,6 +68,8 @@ public sealed class RegistrationsController(IRegistrationService service, IStand
     [HttpPost("invites")]
     [Authorize]
     [ProducesResponseType(typeof(LeagueInviteCreatedDTO), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(HttpValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<LeagueInviteCreatedDTO>> CreateInvite(int leagueId, [FromBody] LeagueInviteCreateDTO dto, CancellationToken ct)
@@ -114,6 +116,7 @@ public sealed class RegistrationsController(IRegistrationService service, IStand
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Delete(int leagueId, int id, CancellationToken ct)
     {

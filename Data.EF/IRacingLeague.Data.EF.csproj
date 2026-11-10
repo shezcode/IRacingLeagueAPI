@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <!-- Maps the existing DWES1 entities; EF lives here so the CLI's Data project stays ORM-free. -->
+    <!-- EF Core stays in this persistence implementation project. -->
     <ProjectReference Include="..\Models\IRacingLeague.Models.csproj" />
     <ProjectReference Include="..\Data\IRacingLeague.Data.csproj" />
   </ItemGroup>

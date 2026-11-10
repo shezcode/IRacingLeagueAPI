@@ -10,7 +10,13 @@ namespace IRacingLeague.API.Controllers;
 [ApiController, Route("api/v1"), Tags("Race results")]
 public sealed class ResultsController(IResultService results, IRaceService races, ILeagueService leagues, IRegistrationService registrations, CsvClassificationParser csvParser, IAuthService auth, LeagueViewPolicy viewPolicy) : ControllerBase
 {
+    /// <summary>Lists a race's classification in position order.</summary>
     [HttpGet("races/{raceId:int}/results")]
+    [ProducesResponseType(typeof(PagedResponse<ResultReadDTO>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(HttpValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<PagedResponse<ResultReadDTO>>> GetByRace(int raceId, [FromQuery] PaginationParameters query, CancellationToken ct)
     {
         var race = await races.GetByIdAsync(raceId, ct); var league = await leagues.GetByIdAsync(race.LeagueId, ct);
@@ -19,7 +25,16 @@ public sealed class ResultsController(IResultService results, IRaceService races
         return Ok(new PagedResponse<ResultReadDTO>(page.Items.Select(ResultReadDTO.FromEntity).ToArray(), page.Page, page.PageSize, page.TotalCount));
     }
 
+    /// <summary>Replaces a race's full classification and recalculates standings and ratings.</summary>
+    /// <remarks>Example request: <code>[{"registrationId":12,"position":1,"fastestLapSeconds":92.5,"incidentPoints":0,"dnf":false,"notes":"Clean race"},{"registrationId":18,"position":2,"fastestLapSeconds":93.1,"incidentPoints":1,"dnf":false,"notes":""}]</code></remarks>
     [HttpPut("races/{raceId:int}/results"), Authorize]
+    [ProducesResponseType(typeof(PagedResponse<ResultReadDTO>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(HttpValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<PagedResponse<ResultReadDTO>>> Replace(int raceId, [FromBody] List<ClassificationEntryDTO> entries, CancellationToken ct)
     {
         var race = await races.GetByIdAsync(raceId, ct); var league = await leagues.GetByIdAsync(race.LeagueId, ct);
@@ -39,6 +54,8 @@ public sealed class ResultsController(IResultService results, IRaceService races
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Import(int raceId, [FromForm] IFormFile file, [FromQuery] bool preview, CancellationToken ct)
     {
         if (file is null) throw new DomainValidationException("A CSV file is required.");
@@ -73,7 +90,13 @@ public sealed class ResultsController(IResultService results, IRaceService races
             new PagedResponse<ResultReadDTO>(page.Items.Select(ResultReadDTO.FromEntity).ToArray(), page.Page, page.PageSize, page.TotalCount));
     }
 
+    /// <summary>Clears a race classification and replays affected driver ratings.</summary>
     [HttpDelete("races/{raceId:int}/results"), Authorize]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Clear(int raceId, CancellationToken ct)
     {
         var race = await races.GetByIdAsync(raceId, ct); var league = await leagues.GetByIdAsync(race.LeagueId, ct);

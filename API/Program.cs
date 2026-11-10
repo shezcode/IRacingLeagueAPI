@@ -29,7 +29,7 @@ if (string.IsNullOrWhiteSpace(jwtSecret) || Encoding.UTF8.GetByteCount(jwtSecret
         "Use .NET user-secrets for local development or JWT__SecretKey in the deployment environment.");
 }
 
-// Controllers are the chosen presentation style for DWES2 (mirrors the BankApp reference).
+// Controllers are the HTTP presentation layer for the league API.
 builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
 {
     options.InvalidModelStateResponseFactory = context =>
@@ -74,6 +74,10 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor;
     options.KnownProxies.Clear();
     options.KnownIPNetworks.Clear();
+    options.ForwardLimit = 1;
+    // Enable only when the app is reachable exclusively through a trusted platform ingress proxy.
+    if (builder.Configuration.GetValue<bool>("ForwardedHeaders:TrustAllProxies"))
+        return;
     foreach (var address in trustedProxyAddresses)
     {
         if (!IPAddress.TryParse(address, out var proxyAddress))
@@ -114,8 +118,7 @@ builder.Services.AddRateLimiter(options =>
     };
 });
 
-// EF Core against PostgreSQL. The connection string is overridable via the
-// ConnectionStrings__ServerDB environment variable (used by Docker Compose in Step 20).
+// EF Core against PostgreSQL. The connection string is supplied through configuration.
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("ServerDB")));
 
@@ -217,7 +220,7 @@ app.UseSwagger();
 app.UseSwaggerUI();
 app.MapGet("/", () => Results.Redirect("/swagger")).ExcludeFromDescription();
 
-// Authentication must run before authorization (Step 18 adds [Authorize] policies).
+// Authentication must run before authorization so endpoint policies see the caller's claims.
 app.UseRouting();
 app.UseRateLimiter();
 app.UseAuthentication();
