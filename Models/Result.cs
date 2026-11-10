@@ -30,7 +30,4 @@ public class Result
         FinishedAt = DateTime.UtcNow;
     }
 
-    public override string ToString() =>
-        $"[{ResultId}] reg #{RegistrationId} race #{RaceId} — P{Position}, {Points} pts, " +
-        $"{IncidentPoints}x, FL {FastestLapSeconds:0.###}s{(Dnf ? ", DNF" : "")}";
 }

@@ -25,7 +25,4 @@ public class League
         CreatedAt = DateTime.UtcNow;
     }
 
-    public override string ToString() =>
-        $"[{LeagueId}] {Name} ({Discipline}) — {(IsPublic ? "public" : "private")}, " +
-        $"max {MaxDrivers}, fee {EntryFee:0.##}, owner #{OwnerUserId}";
 }

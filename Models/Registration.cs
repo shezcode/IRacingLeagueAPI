@@ -29,7 +29,4 @@ public class Registration
 
     public void AddPoints(int points) => Points += points;
 
-    public override string ToString() =>
-        $"[{RegistrationId}] driver #{UserId} — car {CarNumber}, team {TeamName}, " +
-        $"{Points} pts, ballast {BallastKg:0.##}kg{(IsActive ? "" : " (inactive)")}";
 }

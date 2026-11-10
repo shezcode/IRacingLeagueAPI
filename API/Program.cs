@@ -9,6 +9,9 @@ using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Logging.ClearProviders();
+builder.Logging.AddJsonConsole();
+
 // Controllers are the chosen presentation style for DWES2 (mirrors the BankApp reference).
 builder.Services.AddControllers();
 
@@ -121,6 +124,30 @@ app.UseSwaggerUI();
 // Authentication must run before authorization (Step 18 adds [Authorize] policies).
 app.UseAuthentication();
 app.UseAuthorization();
+
+app.MapGet("/health/live", () => Results.Ok(new { status = "healthy" }));
+app.MapGet("/health/ready", async (
+    AppDbContext db,
+    ILogger<Program> logger,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var isReady = await db.Database.CanConnectAsync(cancellationToken);
+        return isReady
+            ? Results.Ok(new { status = "ready", checks = new { postgres = "healthy" } })
+            : Results.Json(
+                new { status = "not_ready", checks = new { postgres = "unhealthy" } },
+                statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+    catch (Exception exception)
+    {
+        logger.LogWarning(exception, "Readiness check failed for PostgreSQL");
+        return Results.Json(
+            new { status = "not_ready", checks = new { postgres = "unhealthy" } },
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+});
 
 app.MapControllers();
 

@@ -6,7 +6,7 @@ public class User
     public string UserName { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty;   // SHA256 hash in the API; plain placeholder in the CLI
-    public string Role { get; set; } = "Driver";            // Admin / Driver / Guest
+    public string Role { get; set; } = "Driver";            // Admin / Driver
     public string Tag { get; set; } = string.Empty;
     public int IRating { get; set; }                        // global, recomputed from results
     public decimal SafetyRating { get; set; }
@@ -61,7 +61,4 @@ public class User
         if (SafetyRating > 4.99m) SafetyRating = 4.99m;
     }
 
-    public override string ToString() =>
-        $"[{UserId}] {UserName} ({Tag}) — {Role}, license {LicenseClass}, " +
-        $"iR {IRating}, SR {SafetyRating:0.00}, wins {TotalWins}";
 }
