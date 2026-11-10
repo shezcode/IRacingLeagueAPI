@@ -25,4 +25,12 @@ public class EfRegistrationRepository : IRegistrationRepository
     }
 
     public void SaveChanges() => _context.SaveChanges();
+    public async Task<IReadOnlyList<Registration>> GetByLeagueAsync(int leagueId, CancellationToken cancellationToken = default) =>
+        await _context.Registrations.Where(r => r.LeagueId == leagueId).ToListAsync(cancellationToken);
+    public async Task<IReadOnlyList<Registration>> GetByUserAsync(int userId, CancellationToken cancellationToken = default) =>
+        await _context.Registrations.Where(r => r.UserId == userId).ToListAsync(cancellationToken);
+    public Task<Registration?> FindMembershipAsync(int userId, int leagueId, CancellationToken cancellationToken = default) =>
+        _context.Registrations.FirstOrDefaultAsync(r => r.UserId == userId && r.LeagueId == leagueId, cancellationToken);
+    public Task<int> CountByLeagueAsync(int leagueId, CancellationToken cancellationToken = default) =>
+        _context.Registrations.CountAsync(r => r.LeagueId == leagueId, cancellationToken);
 }

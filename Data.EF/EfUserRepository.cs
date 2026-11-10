@@ -16,6 +16,10 @@ public class EfUserRepository : IUserRepository
     public IEnumerable<User> GetAll() => _context.Users.AsNoTracking().ToList();
 
     public IQueryable<User> Query() => _context.Users.AsNoTracking();
+    public Task<User?> FindByEmailAsync(string email, CancellationToken cancellationToken = default) =>
+        _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == email.ToLower(), cancellationToken);
+    public Task<bool> EmailExistsAsync(string email, CancellationToken cancellationToken = default) =>
+        _context.Users.AnyAsync(u => u.Email.ToLower() == email.ToLower(), cancellationToken);
 
     public void Update(User user) => _context.Users.Update(user);
 

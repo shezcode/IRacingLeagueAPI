@@ -25,4 +25,10 @@ public class EfResultRepository : IResultRepository
     }
 
     public void SaveChanges() => _context.SaveChanges();
+    public async Task<IReadOnlyList<Result>> GetByRaceAsync(int raceId, CancellationToken cancellationToken = default) =>
+        await _context.Results.Where(r => r.RaceId == raceId).OrderBy(r => r.Position).ToListAsync(cancellationToken);
+    public async Task<IReadOnlyList<Result>> GetByRegistrationAsync(int registrationId, CancellationToken cancellationToken = default) =>
+        await _context.Results.Where(r => r.RegistrationId == registrationId).ToListAsync(cancellationToken);
+    public Task<Result?> FindForRaceAndRegistrationAsync(int raceId, int registrationId, CancellationToken cancellationToken = default) =>
+        _context.Results.FirstOrDefaultAsync(r => r.RaceId == raceId && r.RegistrationId == registrationId, cancellationToken);
 }
