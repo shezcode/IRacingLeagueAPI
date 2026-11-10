@@ -8,6 +8,7 @@ public sealed class LeagueService(ILeagueRepository repository, IRegistrationSer
     public async Task<League> CreateAsync(string name, string discipline, bool isPublic, int maxDrivers, decimal entryFee, int ownerUserId = 0, CancellationToken cancellationToken = default)
     { var league = new League(name, discipline, isPublic, maxDrivers, entryFee, ownerUserId); await repository.AddAsync(league, cancellationToken); await unitOfWork.SaveChangesAsync(cancellationToken); return league; }
     public Task<PagedResponse<League>> GetPublicAsync(LeagueQueryParameters parameters, CancellationToken cancellationToken = default) => repository.GetPublicAsync(parameters, cancellationToken);
+    public Task<PagedResponse<League>> GetForUserAsync(int userId, PaginationParameters parameters, CancellationToken cancellationToken = default) => repository.GetForUserAsync(userId, parameters, cancellationToken);
     public async Task<League> GetByIdAsync(int id, CancellationToken cancellationToken = default) => await repository.GetAsync(id, cancellationToken) ?? throw new NotFoundException($"League with id {id} not found.");
     public async Task UpdateAsync(League league, CancellationToken cancellationToken = default)
     { if (await repository.GetAsync(league.LeagueId, cancellationToken) is null) throw new NotFoundException($"League with id {league.LeagueId} not found."); await repository.UpdateAsync(league, cancellationToken); await unitOfWork.SaveChangesAsync(cancellationToken); }

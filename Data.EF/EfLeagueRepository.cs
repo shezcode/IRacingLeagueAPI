@@ -25,6 +25,15 @@ public sealed class EfLeagueRepository(AppDbContext context) : ILeagueRepository
         var items = await q.Skip((p.Page - 1) * p.PageSize).Take(p.PageSize).ToListAsync(cancellationToken);
         return new PagedResponse<League>(items, p.Page, p.PageSize, totalCount);
     }
+    public async Task<PagedResponse<League>> GetForUserAsync(int userId, PaginationParameters p, CancellationToken cancellationToken = default)
+    {
+        var query = context.Leagues.AsNoTracking()
+            .Where(l => l.OwnerUserId == userId || context.Registrations.Any(r => r.LeagueId == l.LeagueId && r.UserId == userId))
+            .OrderBy(l => l.LeagueId);
+        var totalCount = await query.CountAsync(cancellationToken);
+        var items = await query.Skip((p.Page - 1) * p.PageSize).Take(p.PageSize).ToListAsync(cancellationToken);
+        return new PagedResponse<League>(items, p.Page, p.PageSize, totalCount);
+    }
     public Task<int> CountOwnedByAsync(int userId, CancellationToken cancellationToken = default) => context.Leagues.CountAsync(l => l.OwnerUserId == userId, cancellationToken);
     public Task UpdateAsync(League league, CancellationToken cancellationToken = default)
     { cancellationToken.ThrowIfCancellationRequested(); context.Leagues.Update(league); return Task.CompletedTask; }
