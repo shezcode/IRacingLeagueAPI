@@ -11,6 +11,7 @@ public class Race
     public bool IsCompleted { get; set; }
     public decimal AmbientTempC { get; set; }
     public int Round { get; set; }
+    public uint Version { get; set; }
 
     // Parameterless ctor kept for JSON (de)serialization in a later step.
     public Race() { }

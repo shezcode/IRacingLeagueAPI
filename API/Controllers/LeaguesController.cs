@@ -33,6 +33,7 @@ public sealed class LeaguesController(ILeagueService service, IAuthService auth,
     {
         var league = await service.GetByIdAsync(id, ct);
         if (!await viewPolicy.CanViewAsync(league, User, ct)) throw new ForbiddenException("You do not have access to this resource.");
+        Response.Headers.ETag = ETag(league.Version);
         return Ok(LeagueReadDTO.FromEntity(league));
     }
 
@@ -60,15 +61,20 @@ public sealed class LeaguesController(ILeagueService service, IAuthService auth,
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status412PreconditionFailed)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
-    public async Task<IActionResult> Update(int id, [FromBody] LeagueUpdateDTO dto, CancellationToken ct)
+    public async Task<IActionResult> Update(int id, [FromBody] LeagueUpdateDTO dto, [FromHeader(Name = "If-Match")] string? ifMatch, CancellationToken ct)
     {
         var league = await service.GetByIdAsync(id, ct);
         if (!auth.HasAccessToResource(league.OwnerUserId, User)) throw new ForbiddenException("You do not have access to this resource.");
+        if (!Matches(ifMatch, league.Version)) throw new PreconditionFailedException("The If-Match value does not match the current resource version.");
         league.Name = dto.Name; league.Discipline = dto.Discipline; league.IsPublic = dto.IsPublic; league.MaxDrivers = dto.MaxDrivers; league.EntryFee = dto.EntryFee;
         await service.UpdateAsync(league, ct);
         return NoContent();
     }
+
+    private static string ETag(uint version) => $"\"{version}\"";
+    private static bool Matches(string? ifMatch, uint version) => ifMatch is null || ifMatch.Trim() == ETag(version);
 
     /// <summary>Deletes a league and its dependent data.</summary>
     [HttpDelete("{id:int}")]
