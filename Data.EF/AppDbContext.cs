@@ -12,10 +12,15 @@ public class AppDbContext : DbContext
     public DbSet<Registration> Registrations => Set<Registration>();
     public DbSet<Race> Races => Set<Race>();
     public DbSet<Result> Results => Set<Result>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<User>().HasKey(u => u.UserId);
+        modelBuilder.Entity<RefreshToken>().HasKey(t => t.RefreshTokenId);
+        modelBuilder.Entity<RefreshToken>().HasIndex(t => t.TokenHash).IsUnique();
+        modelBuilder.Entity<RefreshToken>().HasIndex(t => t.FamilyId);
+        modelBuilder.Entity<RefreshToken>().HasOne<User>().WithMany().HasForeignKey(t => t.UserId).OnDelete(DeleteBehavior.Cascade);
         modelBuilder.Entity<League>().HasKey(l => l.LeagueId);
         modelBuilder.Entity<Registration>().HasKey(r => r.RegistrationId);
         modelBuilder.Entity<Race>().HasKey(r => r.RaceId);

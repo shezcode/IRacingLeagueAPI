@@ -10,7 +10,7 @@ namespace IRacingLeague.API.Controllers;
 [Tags("Authentication")]
 public sealed class AuthController(IAuthService auth) : ControllerBase
 {
-    /// <summary>Registers a driver and returns an access token.</summary>
+    /// <summary>Registers a driver and returns access and refresh tokens.</summary>
     /// <remarks>Example request: <code>{"userName":"Ayrton","email":"driver@example.com","password":"long-password","tag":"AYR"}</code></remarks>
     [HttpPost("register")]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -18,7 +18,7 @@ public sealed class AuthController(IAuthService auth) : ControllerBase
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Register([FromBody] UserDtoIn dto, CancellationToken cancellationToken) =>
-        Ok(new { token = await auth.RegisterAsync(dto, cancellationToken) });
+        Ok(await auth.RegisterAsync(dto, cancellationToken));
 
     /// <summary>Authenticates a driver and returns an access token.</summary>
     /// <remarks>Example request: <code>{"email":"driver@example.com","password":"long-password"}</code></remarks>
@@ -28,5 +28,19 @@ public sealed class AuthController(IAuthService auth) : ControllerBase
     [ProducesResponseType(typeof(HttpValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Login([FromBody] LoginDtoIn dto, CancellationToken cancellationToken) =>
-        Ok(new { token = await auth.LoginAsync(dto, cancellationToken) });
+        Ok(await auth.LoginAsync(dto, cancellationToken));
+
+    [HttpPost("refresh")]
+    [ProducesResponseType(typeof(AuthTokenResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> Refresh([FromBody] RefreshTokenDtoIn dto, CancellationToken cancellationToken) =>
+        Ok(await auth.RefreshAsync(dto.RefreshToken, cancellationToken));
+
+    [HttpPost("logout")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> Logout([FromBody] RefreshTokenDtoIn dto, CancellationToken cancellationToken)
+    {
+        await auth.LogoutAsync(dto.RefreshToken, cancellationToken);
+        return NoContent();
+    }
 }

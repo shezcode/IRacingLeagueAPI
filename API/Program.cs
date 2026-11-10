@@ -71,6 +71,7 @@ builder.Services.AddScoped<IRaceRepository, EfRaceRepository>();
 builder.Services.AddScoped<IRegistrationRepository, EfRegistrationRepository>();
 builder.Services.AddScoped<IResultRepository, EfResultRepository>();
 builder.Services.AddScoped<IUserRepository, EfUserRepository>();
+builder.Services.AddScoped<IRefreshTokenRepository, EfRefreshTokenRepository>();
 builder.Services.AddScoped<IUnitOfWork, EfUnitOfWork>();
 
 builder.Services.AddScoped<ILeagueService, LeagueService>();
