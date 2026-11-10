@@ -23,6 +23,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <!-- The apphost pack is unavailable on the locked-down host; run via `dotnet IRacingLeague.API.dll`. -->
     <UseAppHost>false</UseAppHost>
+    <UserSecretsId>iracing-league-api-local</UserSecretsId>
   </PropertyGroup>
 
 </Project>
