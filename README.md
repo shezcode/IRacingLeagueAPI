@@ -25,3 +25,22 @@ Para los errores, los servicios lanzan excepciones tipadas y cada controlador la
 Docker Compose arranca la API .NET 10 y PostgreSQL 17 en una red compartida. La API espera a que PostgreSQL pase el healthcheck y aplica las migraciones EF Core pendientes al iniciar. Los endpoints v1 permanecen disponibles.
 
 `docker compose up --build` inicia ambos servicios. La API escucha en `http://localhost:8009`; PostgreSQL se publica en el host en el puerto `9008`.
+
+## Secret configuration
+
+The repository contains no usable database password or JWT signing key. The API reads `ConnectionStrings:ServerDB` and `JWT:SecretKey` from configuration. In local development, ASP.NET Core loads .NET user-secrets; in Docker and production, provide `ConnectionStrings__ServerDB` and `JWT__SecretKey` as environment variables. The signing key must contain at least 32 UTF-8 bytes or the API exits at startup.
+
+### Local development
+
+From the repository root, set private values in the API project's user-secrets store:
+
+```sh
+dotnet user-secrets set "ConnectionStrings:ServerDB" "Host=localhost;Port=9008;Database=IRacingLeague;Username=iracing;Password=YOUR_LOCAL_DATABASE_PASSWORD" --project API/IRacingLeague.API.csproj
+dotnet user-secrets set "JWT:SecretKey" "$(openssl rand -base64 48)" --project API/IRacingLeague.API.csproj
+```
+
+Run the API with the `Development` environment (for example, `dotnet run --project API/IRacingLeague.API.csproj`). User-secrets are stored outside the repository and are not committed.
+
+### Docker Compose
+
+Copy `.env.example` to `.env`, replace the `CHANGE_ME` values with private values (use the same database password in both database fields), then run `docker compose up --build`. Compose loads `.env` for the PostgreSQL container and API; `.env` is ignored by Git. Use deployment secret management to provide the same two environment variables in production.

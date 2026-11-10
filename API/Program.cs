@@ -10,6 +10,17 @@ using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Fail before configuring the host or touching the database if JWT signing is
+// not configured securely. User secrets and environment variables override
+// appsettings in their normal ASP.NET Core configuration providers.
+var jwtSecret = builder.Configuration["JWT:SecretKey"];
+if (string.IsNullOrWhiteSpace(jwtSecret) || Encoding.UTF8.GetByteCount(jwtSecret) < 32)
+{
+    throw new InvalidOperationException(
+        "JWT:SecretKey must be configured and contain at least 32 UTF-8 bytes. " +
+        "Use .NET user-secrets for local development or JWT__SecretKey in the deployment environment.");
+}
+
 // Controllers are the chosen presentation style for DWES2 (mirrors the BankApp reference).
 builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
 {
@@ -39,7 +50,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidIssuer = builder.Configuration["JWT:ValidIssuer"],
             ValidAudience = builder.Configuration["JWT:ValidAudience"],
             IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(builder.Configuration["JWT:SecretKey"]!))
+                Encoding.UTF8.GetBytes(jwtSecret))
         };
     });
 builder.Services.AddAuthorization();
