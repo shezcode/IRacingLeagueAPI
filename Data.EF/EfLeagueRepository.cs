@@ -9,6 +9,19 @@ public class EfLeagueRepository : ILeagueRepository
 
     public EfLeagueRepository(AppDbContext context) => _context = context;
 
+    public Task AddAsync(League league, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        _context.Leagues.Add(league);
+        return Task.CompletedTask;
+    }
+
+    public Task<League?> GetAsync(int id, CancellationToken cancellationToken = default) =>
+        _context.Leagues.FindAsync(new object[] { id }, cancellationToken).AsTask();
+
+    public async Task<IReadOnlyList<League>> GetAllAsync(CancellationToken cancellationToken = default) =>
+        await _context.Leagues.AsNoTracking().ToListAsync(cancellationToken);
+
     public void Add(League league) => _context.Leagues.Add(league);
 
     public League? Get(int id) => _context.Leagues.Find(id);
@@ -26,5 +39,5 @@ public class EfLeagueRepository : ILeagueRepository
             _context.Leagues.Remove(league);
     }
 
-    public void SaveChanges() => _context.SaveChanges();
+    public Task SaveChangesAsync(CancellationToken cancellationToken = default) => _context.SaveChangesAsync(cancellationToken);
 }

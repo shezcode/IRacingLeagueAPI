@@ -9,6 +9,19 @@ public class EfUserRepository : IUserRepository
 
     public EfUserRepository(AppDbContext context) => _context = context;
 
+    public Task AddAsync(User user, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        _context.Users.Add(user);
+        return Task.CompletedTask;
+    }
+
+    public Task<User?> GetAsync(int id, CancellationToken cancellationToken = default) =>
+        _context.Users.FindAsync(new object[] { id }, cancellationToken).AsTask();
+
+    public async Task<IReadOnlyList<User>> GetAllAsync(CancellationToken cancellationToken = default) =>
+        await _context.Users.AsNoTracking().ToListAsync(cancellationToken);
+
     public void Add(User user) => _context.Users.Add(user);
 
     public User? Get(int id) => _context.Users.Find(id);
@@ -30,5 +43,5 @@ public class EfUserRepository : IUserRepository
             _context.Users.Remove(user);
     }
 
-    public void SaveChanges() => _context.SaveChanges();
+    public Task SaveChangesAsync(CancellationToken cancellationToken = default) => _context.SaveChangesAsync(cancellationToken);
 }

@@ -9,6 +9,19 @@ public class EfRegistrationRepository : IRegistrationRepository
 
     public EfRegistrationRepository(AppDbContext context) => _context = context;
 
+    public Task AddAsync(Registration registration, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        _context.Registrations.Add(registration);
+        return Task.CompletedTask;
+    }
+
+    public Task<Registration?> GetAsync(int id, CancellationToken cancellationToken = default) =>
+        _context.Registrations.FindAsync(new object[] { id }, cancellationToken).AsTask();
+
+    public async Task<IReadOnlyList<Registration>> GetAllAsync(CancellationToken cancellationToken = default) =>
+        await _context.Registrations.AsNoTracking().ToListAsync(cancellationToken);
+
     public void Add(Registration registration) => _context.Registrations.Add(registration);
 
     public Registration? Get(int id) => _context.Registrations.Find(id);
@@ -24,7 +37,7 @@ public class EfRegistrationRepository : IRegistrationRepository
             _context.Registrations.Remove(registration);
     }
 
-    public void SaveChanges() => _context.SaveChanges();
+    public Task SaveChangesAsync(CancellationToken cancellationToken = default) => _context.SaveChangesAsync(cancellationToken);
     public async Task<IReadOnlyList<Registration>> GetByLeagueAsync(int leagueId, CancellationToken cancellationToken = default) =>
         await _context.Registrations.Where(r => r.LeagueId == leagueId).ToListAsync(cancellationToken);
     public async Task<IReadOnlyList<Registration>> GetByUserAsync(int userId, CancellationToken cancellationToken = default) =>

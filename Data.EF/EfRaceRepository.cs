@@ -9,6 +9,19 @@ public class EfRaceRepository : IRaceRepository
 
     public EfRaceRepository(AppDbContext context) => _context = context;
 
+    public Task AddAsync(Race race, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        _context.Races.Add(race);
+        return Task.CompletedTask;
+    }
+
+    public Task<Race?> GetAsync(int id, CancellationToken cancellationToken = default) =>
+        _context.Races.FindAsync(new object[] { id }, cancellationToken).AsTask();
+
+    public async Task<IReadOnlyList<Race>> GetAllAsync(CancellationToken cancellationToken = default) =>
+        await _context.Races.AsNoTracking().ToListAsync(cancellationToken);
+
     public void Add(Race race) => _context.Races.Add(race);
 
     public Race? Get(int id) => _context.Races.Find(id);
@@ -26,5 +39,5 @@ public class EfRaceRepository : IRaceRepository
             _context.Races.Remove(race);
     }
 
-    public void SaveChanges() => _context.SaveChanges();
+    public Task SaveChangesAsync(CancellationToken cancellationToken = default) => _context.SaveChangesAsync(cancellationToken);
 }
