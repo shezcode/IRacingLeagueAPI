@@ -25,7 +25,7 @@ public class AuthService : IAuthService
         // Email is unique; reject duplicates with a friendly error
         // rather than letting the DB throw on SaveChanges.
         if (_users.GetAll().Any(u => u.Email.Equals(dto.Email, StringComparison.OrdinalIgnoreCase)))
-            throw new InvalidOperationException($"An account already exists for '{dto.Email}'.");
+            throw new ConflictException($"An account already exists for '{dto.Email}'.");
 
         var user = new User(dto.UserName, dto.Email, HashPassword(dto.Password),
                             Roles.Driver.ToString(), dto.Tag, dto.LicenseClass);

@@ -50,14 +50,14 @@ public class LeagueService : ILeagueService
     {
         var league = _repository.Get(id);
         if (league == null)
-            throw new KeyNotFoundException($"League with id {id} not found.");
+            throw new NotFoundException($"League with id {id} not found.");
         return league;
     }
 
     public void Update(League league)
     {
         if (_repository.Get(league.LeagueId) == null)
-            throw new KeyNotFoundException($"League with id {league.LeagueId} not found.");
+            throw new NotFoundException($"League with id {league.LeagueId} not found.");
         _repository.Update(league);
         _repository.SaveChanges();
     }
@@ -65,7 +65,7 @@ public class LeagueService : ILeagueService
     public void Delete(int id)
     {
         if (_repository.Get(id) == null)
-            throw new KeyNotFoundException($"League with id {id} not found.");
+            throw new NotFoundException($"League with id {id} not found.");
 
         // Cascade through the lower-level deletes so each registration's and race's results
         // are removed (reversing their stat contributions) before the league itself goes.

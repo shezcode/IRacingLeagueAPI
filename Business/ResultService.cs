@@ -19,7 +19,7 @@ public class ResultService : IResultService
     public Result ApplyResult(Registration registration, Race race, Result result)
     {
         var user = _users.Get(registration.UserId)
-            ?? throw new KeyNotFoundException($"User with id {registration.UserId} not found.");
+            ?? throw new NotFoundException($"User with id {registration.UserId} not found.");
 
         // At most one result per driver per race: re-entering updates in place
         // instead of inserting a duplicate that would double-count points and stats.
@@ -77,14 +77,14 @@ public class ResultService : IResultService
     {
         var result = _results.Get(id);
         if (result == null)
-            throw new KeyNotFoundException($"Result with id {id} not found.");
+            throw new NotFoundException($"Result with id {id} not found.");
         return result;
     }
 
     public void Delete(int id)
     {
         var result = _results.Get(id)
-            ?? throw new KeyNotFoundException($"Result with id {id} not found.");
+            ?? throw new NotFoundException($"Result with id {id} not found.");
         BackOut(result);
         _results.SaveChanges();
     }
