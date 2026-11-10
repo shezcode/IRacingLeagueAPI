@@ -7,11 +7,17 @@ public sealed class RegistrationService(IRegistrationRepository registrations, I
 {
     public async Task<Registration> RegisterAsync(int userId, int leagueId, int carNumber, string teamName, decimal ballastKg, CancellationToken cancellationToken = default)
     {
-        var league = await leagues.GetAsync(leagueId, cancellationToken) ?? throw new NotFoundException($"League with id {leagueId} not found.");
-        if (await registrations.FindMembershipAsync(userId, leagueId, cancellationToken) is not null) throw new DuplicateRegistrationException($"Driver #{userId} is already registered in league '{league.Name}'.");
-        if (await registrations.CountByLeagueAsync(leagueId, cancellationToken) >= league.MaxDrivers) throw new LeagueFullException($"League '{league.Name}' is full ({league.MaxDrivers} drivers).");
-        var registration = new Registration(userId, leagueId, carNumber, teamName, ballastKg);
-        await registrations.AddAsync(registration, cancellationToken); await unitOfWork.SaveChangesAsync(cancellationToken); return registration;
+        Registration? registration = null;
+        await unitOfWork.ExecuteInTransactionAsync(async ct =>
+        {
+            await leagues.LockForUpdateAsync(leagueId, ct);
+            var league = await leagues.GetAsync(leagueId, ct) ?? throw new NotFoundException($"League with id {leagueId} not found.");
+            if (await registrations.FindMembershipAsync(userId, leagueId, ct) is not null) throw new ConflictException($"Driver #{userId} is already registered in league '{league.Name}'.");
+            if (await registrations.CountByLeagueAsync(leagueId, ct) >= league.MaxDrivers) throw new ConflictException($"League '{league.Name}' is full ({league.MaxDrivers} drivers).");
+            registration = new Registration(userId, leagueId, carNumber, teamName, ballastKg);
+            await registrations.AddAsync(registration, ct);
+        }, cancellationToken);
+        return registration!;
     }
     public Task<bool> IsMemberAsync(int userId, int leagueId, CancellationToken cancellationToken = default) => registrations.HasMembershipAsync(userId, leagueId, cancellationToken);
     public Task<IReadOnlyList<Registration>> GetByLeagueAsync(int leagueId, CancellationToken cancellationToken = default) => registrations.GetByLeagueAsync(leagueId, cancellationToken);

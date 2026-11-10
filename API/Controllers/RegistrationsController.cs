@@ -10,7 +10,7 @@ namespace IRacingLeague.API.Controllers;
 [ApiController]
 [Route("api/v1/leagues/{leagueId:int}")]
 [Tags("League members", "Standings")]
-public sealed class RegistrationsController(IRegistrationService service, IStandingsService standings, ILeagueService leagues, IAuthService auth, LeagueViewPolicy viewPolicy) : ControllerBase
+public sealed class RegistrationsController(IRegistrationService service, IStandingsService standings, ILeagueService leagues, IUserService users, IAuthService auth, LeagueViewPolicy viewPolicy) : ControllerBase
 {
     /// <summary>Lists members in the league.</summary>
     [HttpGet("members")]
@@ -54,7 +54,13 @@ public sealed class RegistrationsController(IRegistrationService service, IStand
     public async Task<ActionResult<RegistrationReadDTO>> Register(int leagueId, [FromBody] RegistrationCreateDTO dto, CancellationToken ct)
     {
         var callerId = auth.GetUserId(User) ?? throw new UnauthorizedAccessException("Authentication is required."); var targetId = dto.UserId ?? callerId;
-        if (targetId != callerId) { var league = await leagues.GetByIdAsync(leagueId, ct); if (!auth.HasAccessToResource(league.OwnerUserId, User)) throw new ForbiddenException("You do not have access to this resource."); }
+        var league = await leagues.GetByIdAsync(leagueId, ct);
+        if (targetId != callerId)
+        {
+            if (!auth.HasAccessToResource(league.OwnerUserId, User)) throw new ForbiddenException("You do not have access to this resource.");
+            await users.GetByIdAsync(targetId, ct);
+        }
+        else if (!league.IsPublic) throw new ForbiddenException("You cannot join a private league without an invitation.");
         var registration = await service.RegisterAsync(targetId, leagueId, dto.CarNumber, dto.TeamName, dto.BallastKg, ct);
         return CreatedAtAction(nameof(GetMembers), new { leagueId }, RegistrationReadDTO.FromEntity(registration));
     }

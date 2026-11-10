@@ -10,6 +10,9 @@ public sealed class EfLeagueRepository(AppDbContext context) : ILeagueRepository
     public Task AddAsync(League league, CancellationToken cancellationToken = default)
     { cancellationToken.ThrowIfCancellationRequested(); context.Leagues.Add(league); return Task.CompletedTask; }
     public Task<League?> GetAsync(int id, CancellationToken cancellationToken = default) => context.Leagues.FindAsync([id], cancellationToken).AsTask();
+    public async Task LockForUpdateAsync(int id, CancellationToken cancellationToken = default) =>
+        _ = await context.Leagues.FromSqlInterpolated($"SELECT * FROM \"Leagues\" WHERE \"LeagueId\" = {id} FOR UPDATE").ToListAsync(cancellationToken);
+    public Task<int> CountMembersAsync(int id, CancellationToken cancellationToken = default) => context.Registrations.CountAsync(r => r.LeagueId == id, cancellationToken);
     public async Task<PagedResponse<League>> GetPublicAsync(LeagueQueryParameters p, CancellationToken cancellationToken = default)
     {
         var q = context.Leagues.AsNoTracking().Where(l => l.IsPublic);

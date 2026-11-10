@@ -54,6 +54,12 @@ namespace IRacingLeague.Data.EF.Migrations
                     b.Property<int>("OwnerUserId")
                         .HasColumnType("integer");
 
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
                     b.HasKey("LeagueId");
 
                     b.HasIndex("OwnerUserId");
@@ -95,6 +101,12 @@ namespace IRacingLeague.Data.EF.Migrations
                     b.Property<string>("Track")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
 
                     b.HasKey("RaceId");
 
@@ -181,9 +193,13 @@ namespace IRacingLeague.Data.EF.Migrations
 
                     b.HasKey("RegistrationId");
 
-                    b.HasIndex("LeagueId");
-
                     b.HasIndex("UserId");
+
+                    b.HasIndex("LeagueId", "CarNumber")
+                        .IsUnique();
+
+                    b.HasIndex("LeagueId", "UserId")
+                        .IsUnique();
 
                     b.ToTable("Registrations");
                 });
