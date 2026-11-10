@@ -38,7 +38,7 @@ public sealed class LeaguesController(ILeagueService service, IAuthService auth,
     }
 
     /// <summary>Creates a league owned by the caller.</summary>
-    /// <remarks>Example request: <code>{"name":"Sunday Cup","discipline":"Road","isPublic":true,"maxDrivers":24,"entryFee":0}</code></remarks>
+    /// <remarks>Example request: <code>{"name":"Sunday Cup","discipline":"Road","isPublic":true,"maxDrivers":24,"entryFee":0,"pointsTable":[25,18,15,12,10,8,6,4,2,1],"fastestLapBonus":1}</code></remarks>
     [HttpPost]
     [Authorize(Roles = $"{nameof(Roles.Driver)},{nameof(Roles.Admin)}")]
     [ProducesResponseType(typeof(LeagueReadDTO), StatusCodes.Status201Created)]
@@ -48,7 +48,7 @@ public sealed class LeaguesController(ILeagueService service, IAuthService auth,
     public async Task<ActionResult<LeagueReadDTO>> Create([FromBody] LeagueCreateDTO dto, CancellationToken ct)
     {
         var ownerId = auth.GetUserId(User) ?? throw new UnauthorizedAccessException("Authentication is required.");
-        var league = await service.CreateAsync(dto.Name, dto.Discipline, dto.IsPublic, dto.MaxDrivers, dto.EntryFee, ownerId, ct);
+        var league = await service.CreateAsync(dto.Name, dto.Discipline, dto.IsPublic, dto.MaxDrivers, dto.EntryFee, ownerId, ct, dto.PointsTable, dto.FastestLapBonus);
         return CreatedAtAction(nameof(Get), new { id = league.LeagueId }, LeagueReadDTO.FromEntity(league));
     }
 

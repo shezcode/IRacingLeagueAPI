@@ -1,5 +1,3 @@
-using System.ComponentModel.DataAnnotations.Schema;
-
 namespace IRacingLeague.Models;
 
 public class User
@@ -16,7 +14,6 @@ public class User
     public bool IsActive { get; set; }
     public int TotalWins { get; set; }                      // global, recomputed
     public DateTime JoinedAt { get; set; }
-    [NotMapped]
     public int RacesCompleted { get; set; }
 
     // Parameterless ctor kept for JSON (de)serialization in a later step.
@@ -35,34 +32,6 @@ public class User
         TotalWins = 0;
         IsActive = true;
         JoinedAt = DateTime.UtcNow;
-    }
-
-    public void ApplyRaceOutcome(int position, int incidentPoints)
-    {
-        int iRatingDelta = Math.Max(50 - (position - 1) * 10, -30);
-        IRating += iRatingDelta;
-
-        if (position == 1)
-            TotalWins++;
-
-        SafetyRating -= incidentPoints * 0.05m;
-        if (SafetyRating < 0m) SafetyRating = 0m;
-        if (SafetyRating > 4.99m) SafetyRating = 4.99m;
-    }
-
-    // Exact inverse of ApplyRaceOutcome, used when a result is re-entered so the
-    // previous contribution can be backed out before the new one is applied.
-    public void UndoRaceOutcome(int position, int incidentPoints)
-    {
-        int iRatingDelta = Math.Max(50 - (position - 1) * 10, -30);
-        IRating -= iRatingDelta;
-
-        if (position == 1)
-            TotalWins--;
-
-        SafetyRating += incidentPoints * 0.05m;
-        if (SafetyRating < 0m) SafetyRating = 0m;
-        if (SafetyRating > 4.99m) SafetyRating = 4.99m;
     }
 
 }

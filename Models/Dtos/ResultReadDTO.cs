@@ -10,6 +10,10 @@ public class ResultReadDTO
     public bool FastestLap { get; set; }
     public int Points { get; set; }
     public int IncidentPoints { get; set; }
+    public int IRatingBefore { get; set; }
+    public int IRatingChange { get; set; }
+    public decimal SafetyRatingBefore { get; set; }
+    public decimal SafetyRatingChange { get; set; }
     public bool Dnf { get; set; }
     public string Notes { get; set; } = string.Empty;
     public DateTime FinishedAt { get; set; }
@@ -24,6 +28,10 @@ public class ResultReadDTO
         FastestLap = r.FastestLap,
         Points = r.Points,
         IncidentPoints = r.IncidentPoints,
+        IRatingBefore = r.IRatingBefore,
+        IRatingChange = r.IRatingChange,
+        SafetyRatingBefore = r.SafetyRatingBefore,
+        SafetyRatingChange = r.SafetyRatingChange,
         Dnf = r.Dnf,
         Notes = r.Notes,
         FinishedAt = r.FinishedAt

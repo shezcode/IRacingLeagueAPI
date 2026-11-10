@@ -4,12 +4,13 @@ using IRacingLeague.Models.Dtos;
 
 namespace IRacingLeague.Business;
 
-public sealed class ResultService(IResultRepository results, IRegistrationRepository registrations, IRaceRepository races, ILeagueRepository leagues, IUnitOfWork unitOfWork) : IResultService
+public sealed class ResultService(IResultRepository results, IRegistrationRepository registrations, IRaceRepository races, ILeagueRepository leagues, IUnitOfWork unitOfWork, IRatingReplayService ratingReplay) : IResultService
 {
     public async Task ReplaceClassificationAsync(int raceId, IReadOnlyList<ClassificationEntryDTO> entries, CancellationToken cancellationToken = default)
     {
         var race = await races.GetAsync(raceId, cancellationToken) ?? throw new NotFoundException($"Race with id {raceId} not found.");
         var league = await leagues.GetAsync(race.LeagueId, cancellationToken) ?? throw new NotFoundException($"League with id {race.LeagueId} not found.");
+        var previousRegistrationIds = (await results.GetByRaceAsync(raceId, cancellationToken)).Select(x => x.RegistrationId);
         var errors = Validate(entries, race, league);
         var members = await registrations.GetByLeagueAsync(race.LeagueId, cancellationToken);
         var memberIds = members.Select(x => x.RegistrationId).ToHashSet();
@@ -34,13 +35,24 @@ public sealed class ResultService(IResultRepository results, IRegistrationReposi
             await results.ReplaceRaceAsync(raceId, scored, ct);
             race.IsCompleted = scored.Count > 0;
             await races.UpdateAsync(race, ct);
+            await unitOfWork.SaveChangesAsync(ct);
+            await ratingReplay.ReplayFromAsync(race.ScheduledAt, raceId,
+                previousRegistrationIds.Concat(entries.Select(x => x.RegistrationId)).Distinct().ToArray(), ct);
         }, cancellationToken);
     }
 
     public async Task ClearClassificationAsync(int raceId, CancellationToken cancellationToken = default)
     {
         var race = await races.GetAsync(raceId, cancellationToken) ?? throw new NotFoundException($"Race with id {raceId} not found.");
-        await unitOfWork.ExecuteInTransactionAsync(async ct => { await results.ClearRaceAsync(raceId, ct); race.IsCompleted = false; await races.UpdateAsync(race, ct); }, cancellationToken);
+        var changedRegistrationIds = (await results.GetByRaceAsync(raceId, cancellationToken)).Select(x => x.RegistrationId).ToArray();
+        await unitOfWork.ExecuteInTransactionAsync(async ct =>
+        {
+            await results.ClearRaceAsync(raceId, ct);
+            race.IsCompleted = false;
+            await races.UpdateAsync(race, ct);
+            await unitOfWork.SaveChangesAsync(ct);
+            await ratingReplay.ReplayFromAsync(race.ScheduledAt, raceId, changedRegistrationIds, ct);
+        }, cancellationToken);
     }
 
     private static List<string> Validate(IReadOnlyList<ClassificationEntryDTO> entries, Race race, League league)
@@ -54,12 +66,7 @@ public sealed class ResultService(IResultRepository results, IRegistrationReposi
         var finishers = entries.Where(x => !x.Dnf).ToList();
         if (entries.Any(x => x.Dnf && finishers.Any(f => f.Position > x.Position))) errors.Add("DNF positions must be after all finishers.");
         if (entries.Any(x => x.RegistrationId <= 0 || x.Position <= 0 || x.Position > 999 || x.IncidentPoints < 0 || x.IncidentPoints > 100 || x.FastestLapSeconds < 0 || x.FastestLapSeconds > 9999)) errors.Add("One or more classification values are out of range.");
-        try
-        {
-            var points = league.PointsTable;
-            if (points.Length is < 1 or > 50 || points.Any(x => x < 0 || x > 1000) || points.Zip(points.Skip(1)).Any(p => p.First < p.Second) || league.FastestLapBonus is < 0 or > 50) errors.Add("League points table or fastest lap bonus is invalid.");
-        }
-        catch { errors.Add("League points table must contain between 1 and 50 integer point values."); }
+        errors.AddRange(LeagueScoring.Validate(league.PointsTable, league.FastestLapBonus));
         return errors;
     }
     private static int Score(int[] table, int position) => position <= table.Length ? table[position - 1] : 0;

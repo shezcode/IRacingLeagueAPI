@@ -59,11 +59,12 @@ namespace IRacingLeague.Data.EF.Migrations
                     b.Property<int>("OwnerUserId")
                         .HasColumnType("integer");
 
-                    b.Property<int[]>("PointsTable")
+                    b.PrimitiveCollection<int[]>("PointsTable")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer[]")
                         .HasDefaultValue(new[] { 25, 18, 15, 12, 10, 8, 6, 4, 2, 1 });
+
                     b.Property<uint>("Version")
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAddOrUpdate()
@@ -232,6 +233,12 @@ namespace IRacingLeague.Data.EF.Migrations
                     b.Property<DateTime>("FinishedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<int>("IRatingBefore")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("IRatingChange")
+                        .HasColumnType("integer");
+
                     b.Property<int>("IncidentPoints")
                         .HasColumnType("integer");
 
@@ -250,6 +257,14 @@ namespace IRacingLeague.Data.EF.Migrations
 
                     b.Property<int>("RegistrationId")
                         .HasColumnType("integer");
+
+                    b.Property<decimal>("SafetyRatingBefore")
+                        .HasPrecision(4, 2)
+                        .HasColumnType("numeric(4,2)");
+
+                    b.Property<decimal>("SafetyRatingChange")
+                        .HasPrecision(4, 2)
+                        .HasColumnType("numeric(4,2)");
 
                     b.HasKey("ResultId");
 
@@ -292,6 +307,9 @@ namespace IRacingLeague.Data.EF.Migrations
                     b.Property<string>("Password")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<int>("RacesCompleted")
+                        .HasColumnType("integer");
 
                     b.Property<string>("Role")
                         .IsRequired()

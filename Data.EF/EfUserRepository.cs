@@ -11,10 +11,10 @@ public sealed class EfUserRepository(AppDbContext context) : IUserRepository
     { cancellationToken.ThrowIfCancellationRequested(); context.Users.Add(user); return Task.CompletedTask; }
     public async Task<User?> GetAsync(int id, CancellationToken cancellationToken = default)
     {
-        var user = await context.Users.FindAsync([id], cancellationToken);
-        if (user is not null) user.RacesCompleted = await (from result in context.Results join registration in context.Registrations on result.RegistrationId equals registration.RegistrationId where registration.UserId == id select result.ResultId).CountAsync(cancellationToken);
-        return user;
+        return await context.Users.FindAsync([id], cancellationToken);
     }
+    public async Task<IReadOnlyList<User>> GetByIdsAsync(IReadOnlyCollection<int> ids, CancellationToken cancellationToken = default) =>
+        await context.Users.Where(u => ids.Contains(u.UserId)).ToListAsync(cancellationToken);
     public Task<User?> FindByEmailAsync(string email, CancellationToken cancellationToken = default) => context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == email.ToLower(), cancellationToken);
     public Task<bool> EmailExistsAsync(string email, CancellationToken cancellationToken = default) => context.Users.AnyAsync(u => u.Email.ToLower() == email.ToLower(), cancellationToken);
     public async Task<PagedResponse<User>> QueryAsync(UserQueryParameters p, CancellationToken cancellationToken = default)
@@ -31,9 +31,6 @@ public sealed class EfUserRepository(AppDbContext context) : IUserRepository
         };
         var totalCount = await q.CountAsync(cancellationToken);
         var items = await q.Skip((p.Page - 1) * p.PageSize).Take(p.PageSize).ToListAsync(cancellationToken);
-        var ids = items.Select(u => u.UserId).ToArray();
-        var counts = await (from result in context.Results join registration in context.Registrations on result.RegistrationId equals registration.RegistrationId where ids.Contains(registration.UserId) group result by registration.UserId into g select new { UserId = g.Key, Count = g.Count() }).ToDictionaryAsync(x => x.UserId, x => x.Count, cancellationToken);
-        foreach (var user in items) user.RacesCompleted = counts.GetValueOrDefault(user.UserId);
         return new PagedResponse<User>(items, p.Page, p.PageSize, totalCount);
     }
     public Task UpdateAsync(User user, CancellationToken cancellationToken = default)

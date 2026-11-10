@@ -5,8 +5,18 @@ namespace IRacingLeague.Business;
 
 public sealed class LeagueService(ILeagueRepository repository, IRegistrationService registrations, IRaceService races, IRaceRepository raceRepository, IUnitOfWork unitOfWork) : ILeagueService
 {
-    public async Task<League> CreateAsync(string name, string discipline, bool isPublic, int maxDrivers, decimal entryFee, int ownerUserId = 0, CancellationToken cancellationToken = default)
-    { var league = new League(name, discipline, isPublic, maxDrivers, entryFee, ownerUserId); await repository.AddAsync(league, cancellationToken); await unitOfWork.SaveChangesAsync(cancellationToken); return league; }
+    public async Task<League> CreateAsync(string name, string discipline, bool isPublic, int maxDrivers, decimal entryFee, int ownerUserId = 0, CancellationToken cancellationToken = default, int[]? pointsTable = null, int? fastestLapBonus = null)
+    {
+        var selectedPoints = pointsTable ?? [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
+        var selectedBonus = fastestLapBonus ?? 1;
+        var scoringErrors = LeagueScoring.Validate(selectedPoints, selectedBonus);
+        if (scoringErrors.Count > 0) throw new DomainValidationException(string.Join("; ", scoringErrors));
+        var league = new League(name, discipline, isPublic, maxDrivers, entryFee, ownerUserId)
+        { PointsTable = selectedPoints, FastestLapBonus = selectedBonus };
+        await repository.AddAsync(league, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        return league;
+    }
     public Task<PagedResponse<League>> GetPublicAsync(LeagueQueryParameters parameters, CancellationToken cancellationToken = default) => repository.GetPublicAsync(parameters, cancellationToken);
     public Task<PagedResponse<League>> GetForUserAsync(int userId, PaginationParameters parameters, CancellationToken cancellationToken = default) => repository.GetForUserAsync(userId, parameters, cancellationToken);
     public async Task<League> GetByIdAsync(int id, CancellationToken cancellationToken = default) => await repository.GetAsync(id, cancellationToken) ?? throw new NotFoundException($"League with id {id} not found.");

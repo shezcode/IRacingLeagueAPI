@@ -38,11 +38,13 @@ public class AppDbContext : DbContext
         // Set decimal precision explicitly to keep the schema stable across providers.
         modelBuilder.Entity<League>().Property(l => l.EntryFee).HasPrecision(10, 2);
         modelBuilder.Entity<League>().Property(l => l.PointsTable).HasColumnType("integer[]").HasDefaultValue(new[] { 25, 18, 15, 12, 10, 8, 6, 4, 2, 1 });
-        modelBuilder.Entity<League>().Property(l => l.FastestLapBonus).HasDefaultValue(1);
+        modelBuilder.Entity<League>().Property(l => l.FastestLapBonus).HasDefaultValue(1).HasSentinel(-1);
         modelBuilder.Entity<User>().Property(u => u.SafetyRating).HasPrecision(4, 2);
         modelBuilder.Entity<Registration>().Property(r => r.BallastKg).HasPrecision(6, 2);
         modelBuilder.Entity<Race>().Property(r => r.AmbientTempC).HasPrecision(5, 2);
         modelBuilder.Entity<Result>().Property(r => r.FastestLapSeconds).HasPrecision(8, 3);
+        modelBuilder.Entity<Result>().Property(r => r.SafetyRatingBefore).HasPrecision(4, 2);
+        modelBuilder.Entity<Result>().Property(r => r.SafetyRatingChange).HasPrecision(4, 2);
 
         // The FK scalar already exists on each child (e.g. Registration.UserId), so we map to it
         // explicitly and rely on it rather than EF inventing a shadow FK.

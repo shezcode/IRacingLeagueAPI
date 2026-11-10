@@ -10,6 +10,10 @@ public class Result
     public bool FastestLap { get; set; }
     public int Points { get; set; }           // points awarded for this race
     public int IncidentPoints { get; set; }   // iRacing "x" incidents
+    public int IRatingBefore { get; set; }
+    public int IRatingChange { get; set; }
+    public decimal SafetyRatingBefore { get; set; }
+    public decimal SafetyRatingChange { get; set; }
     public bool Dnf { get; set; }
     public string Notes { get; set; } = string.Empty;
     public DateTime FinishedAt { get; set; }

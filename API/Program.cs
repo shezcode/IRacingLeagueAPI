@@ -124,6 +124,7 @@ builder.Services.AddScoped<ILeagueRepository, EfLeagueRepository>();
 builder.Services.AddScoped<IRaceRepository, EfRaceRepository>();
 builder.Services.AddScoped<IRegistrationRepository, EfRegistrationRepository>();
 builder.Services.AddScoped<IResultRepository, EfResultRepository>();
+builder.Services.AddScoped<IRatingReplayRepository, EfRatingReplayRepository>();
 builder.Services.AddScoped<IUserRepository, EfUserRepository>();
 builder.Services.AddScoped<IRefreshTokenRepository, EfRefreshTokenRepository>();
 builder.Services.AddScoped<IUnitOfWork, EfUnitOfWork>();
@@ -133,6 +134,8 @@ builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IRaceService, RaceService>();
 builder.Services.AddScoped<IRegistrationService, RegistrationService>();
 builder.Services.AddScoped<IResultService, ResultService>();
+builder.Services.AddScoped<IRatingReplayService, RatingReplayService>();
+builder.Services.AddSingleton<RatingCalculator>();
 builder.Services.AddScoped<IStandingsService, StandingsService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 
@@ -200,7 +203,18 @@ using (var scope = app.Services.CreateScope())
         }
     }
 
-    DbSeeder.Seed(db);
+    if (DbSeeder.Seed(db))
+    {
+        var firstResultRace = await (from result in db.Results
+                                     join race in db.Races on result.RaceId equals race.RaceId
+                                     orderby race.ScheduledAt, race.RaceId
+                                     select new { race.ScheduledAt, race.RaceId }).FirstAsync();
+        var registrationIds = await db.Results.Select(result => result.RegistrationId).Distinct().ToArrayAsync();
+        var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var ratingReplay = scope.ServiceProvider.GetRequiredService<IRatingReplayService>();
+        await unitOfWork.ExecuteInTransactionAsync(ct =>
+            ratingReplay.ReplayFromAsync(firstResultRace.ScheduledAt, firstResultRace.RaceId, registrationIds, ct));
+    }
 }
 
 // Swagger is left on in every environment so the skeleton is verifiable in the container too.
