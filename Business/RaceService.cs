@@ -18,7 +18,7 @@ public sealed class RaceService(IRaceRepository races, ILeagueRepository leagues
     {
         race.ScheduledAt = AsUtc(race.ScheduledAt);
         var existing = await races.GetAsync(race.RaceId, cancellationToken) ?? throw new NotFoundException($"Race with id {race.RaceId} not found.");
-        if (existing.IsCompleted && race.ScheduledAt != existing.ScheduledAt) throw new DomainValidationException("A completed race cannot be rescheduled.");
+        if (existing.IsCompleted && race.ScheduledAt != existing.ScheduledAt) throw new ConflictException("A completed race cannot be rescheduled.");
         await unitOfWork.ExecuteInTransactionAsync(async ct => { await races.UpdateAsync(race, ct); await RenumberRoundsAsync(race.LeagueId, ct); }, cancellationToken);
     }
     public async Task DeleteAsync(int id, CancellationToken cancellationToken = default)
