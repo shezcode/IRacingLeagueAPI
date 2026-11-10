@@ -3,70 +3,21 @@ using IRacingLeague.Models;
 using IRacingLeague.Models.Dtos;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-
 namespace IRacingLeague.API.Controllers;
 
 [ApiController]
 [Route("users")]
-public class UsersController : ControllerBase
+public sealed class UsersController(IUserService service, IAuthService auth) : ControllerBase
 {
-    private readonly IUserService _service;
-    private readonly IAuthService _auth;
-    private readonly ILogger<UsersController> _logger;
-
-    public UsersController(IUserService service, IAuthService auth, ILogger<UsersController> logger)
-    {
-        _service = service;
-        _auth = auth;
-        _logger = logger;
-    }
-
     [HttpGet]
-    public ActionResult<IEnumerable<UserDTOOut>> GetAll([FromQuery] UserQueryParameters query)
-    {
-
-            var users = _service.Query(query).Select(UserDTOOut.FromEntity);
-            return Ok(users);
-
-    }
-
+    public async Task<ActionResult<IEnumerable<UserDTOOut>>> GetAll([FromQuery] UserQueryParameters query, CancellationToken ct) => Ok((await service.QueryAsync(query, ct)).Select(UserDTOOut.FromEntity));
     [HttpGet("{id}")]
-    public ActionResult<UserDTOOut> Get(int id)
-    {
-
-            var user = _service.GetById(id);
-            return Ok(UserDTOOut.FromEntity(user));
-
-    }
-
+    public async Task<ActionResult<UserDTOOut>> Get(int id, CancellationToken ct) => Ok(UserDTOOut.FromEntity(await service.GetByIdAsync(id, ct)));
     [HttpPut("{id}")]
     [Authorize]
-    public IActionResult Update(int id, [FromBody] UserUpdateDTO dto)
-    {
-        if (!_auth.HasAccessToResource(id, User))   // self (id == caller) or Admin
-            throw new IRacingLeague.Business.ForbiddenException("You do not have access to this resource.");
-
-
-            var user = _service.GetById(id);   // throws KeyNotFoundException when missing
-            user.UserName = dto.UserName;
-            user.Tag = dto.Tag;
-            user.LicenseClass = dto.LicenseClass;
-
-            _service.Update(user);
-            return NoContent();
-
-    }
-
+    public async Task<IActionResult> Update(int id, [FromBody] UserUpdateDTO dto, CancellationToken ct)
+    { if (!auth.HasAccessToResource(id, User)) throw new ForbiddenException("You do not have access to this resource."); var user = await service.GetByIdAsync(id, ct); user.UserName = dto.UserName; user.Tag = dto.Tag; user.LicenseClass = dto.LicenseClass; await service.UpdateAsync(user, ct); return NoContent(); }
     [HttpDelete("{id}")]
     [Authorize(Roles = nameof(Roles.Admin))]
-    public IActionResult Delete(int id)
-    {
-
-            // Cascades the user's own registrations (and their results); refuses if the user
-            // still owns any league (UserOwnsLeaguesException -> 409).
-            _service.Delete(id);
-            return NoContent();
-
-    }
+    public async Task<IActionResult> Delete(int id, CancellationToken ct) { await service.DeleteAsync(id, ct); return NoContent(); }
 }

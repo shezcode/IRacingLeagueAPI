@@ -4,97 +4,27 @@ using IRacingLeague.Models;
 using IRacingLeague.Models.Dtos;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-
 namespace IRacingLeague.API.Controllers;
 
 [ApiController]
-[Route("[controller]")]
-public class LeaguesController : ControllerBase
+[Route("leagues")]
+public sealed class LeaguesController(ILeagueService service, IAuthService auth, LeagueViewPolicy viewPolicy) : ControllerBase
 {
-    private readonly ILeagueService _service;
-    private readonly IAuthService _auth;
-    private readonly LeagueViewPolicy _viewPolicy;
-    private readonly ILogger<LeaguesController> _logger;
-
-    public LeaguesController(
-        ILeagueService service, IAuthService auth,
-        LeagueViewPolicy viewPolicy, ILogger<LeaguesController> logger)
-    {
-        _service = service;
-        _auth = auth;
-        _viewPolicy = viewPolicy;
-        _logger = logger;
-    }
-
     [HttpGet]
-    public ActionResult<IEnumerable<LeagueReadDTO>> GetAll([FromQuery] LeagueQueryParameters query)
-    {
-
-            var leagues = _service.GetPublic(query).Select(LeagueReadDTO.FromEntity);
-            return Ok(leagues);
-
-    }
-
+    public async Task<ActionResult<IEnumerable<LeagueReadDTO>>> GetAll([FromQuery] LeagueQueryParameters query, CancellationToken ct) => Ok((await service.GetPublicAsync(query, ct)).Select(LeagueReadDTO.FromEntity));
     [HttpGet("{id}")]
-    public ActionResult<LeagueReadDTO> Get(int id)
-    {
-
-            var league = _service.GetById(id);
-            if (!_viewPolicy.CanView(league, User))
-                throw new IRacingLeague.Business.ForbiddenException("You do not have access to this resource.");
-
-            return Ok(LeagueReadDTO.FromEntity(league));
-
-    }
-
+    public async Task<ActionResult<LeagueReadDTO>> Get(int id, CancellationToken ct)
+    { var league = await service.GetByIdAsync(id, ct); if (!await viewPolicy.CanViewAsync(league, User, ct)) throw new ForbiddenException("You do not have access to this resource."); return Ok(LeagueReadDTO.FromEntity(league)); }
     [HttpPost]
     [Authorize(Roles = $"{nameof(Roles.Driver)},{nameof(Roles.Admin)}")]
-    public ActionResult<LeagueReadDTO> Create([FromBody] LeagueCreateDTO dto)
-    {
-        var ownerUserId = _auth.GetUserId(User);
-        if (ownerUserId is null)
-            throw new UnauthorizedAccessException("Authentication is required.");
-
-
-            var league = _service.Create(
-                dto.Name, dto.Discipline, dto.IsPublic, dto.MaxDrivers, dto.EntryFee, ownerUserId.Value);
-
-            return CreatedAtAction(nameof(Get), new { id = league.LeagueId }, LeagueReadDTO.FromEntity(league));
-
-    }
-
+    public async Task<ActionResult<LeagueReadDTO>> Create([FromBody] LeagueCreateDTO dto, CancellationToken ct)
+    { var ownerId = auth.GetUserId(User) ?? throw new UnauthorizedAccessException("Authentication is required."); var league = await service.CreateAsync(dto.Name, dto.Discipline, dto.IsPublic, dto.MaxDrivers, dto.EntryFee, ownerId, ct); return CreatedAtAction(nameof(Get), new { id = league.LeagueId }, LeagueReadDTO.FromEntity(league)); }
     [HttpPut("{id}")]
     [Authorize]
-    public IActionResult Update(int id, [FromBody] LeagueUpdateDTO dto)
-    {
-
-            var league = _service.GetById(id);   // throws KeyNotFoundException when missing
-            if (!_auth.HasAccessToResource(league.OwnerUserId, User))
-                throw new IRacingLeague.Business.ForbiddenException("You do not have access to this resource.");
-
-            league.Name = dto.Name;
-            league.Discipline = dto.Discipline;
-            league.IsPublic = dto.IsPublic;
-            league.MaxDrivers = dto.MaxDrivers;
-            league.EntryFee = dto.EntryFee;
-
-            _service.Update(league);
-            return NoContent();
-
-    }
-
+    public async Task<IActionResult> Update(int id, [FromBody] LeagueUpdateDTO dto, CancellationToken ct)
+    { var league = await service.GetByIdAsync(id, ct); if (!auth.HasAccessToResource(league.OwnerUserId, User)) throw new ForbiddenException("You do not have access to this resource."); league.Name = dto.Name; league.Discipline = dto.Discipline; league.IsPublic = dto.IsPublic; league.MaxDrivers = dto.MaxDrivers; league.EntryFee = dto.EntryFee; await service.UpdateAsync(league, ct); return NoContent(); }
     [HttpDelete("{id}")]
     [Authorize]
-    public IActionResult Delete(int id)
-    {
-
-            var league = _service.GetById(id);   // throws KeyNotFoundException when missing
-            if (!_auth.HasAccessToResource(league.OwnerUserId, User))
-                throw new IRacingLeague.Business.ForbiddenException("You do not have access to this resource.");
-
-            _service.Delete(id);
-            return NoContent();
-
-    }
+    public async Task<IActionResult> Delete(int id, CancellationToken ct)
+    { var league = await service.GetByIdAsync(id, ct); if (!auth.HasAccessToResource(league.OwnerUserId, User)) throw new ForbiddenException("You do not have access to this resource."); await service.DeleteAsync(id, ct); return NoContent(); }
 }

@@ -1,13 +1,12 @@
 using IRacingLeague.Models;
-
 namespace IRacingLeague.Business;
 
 public interface IRegistrationService
 {
-    Registration Register(int userId, int leagueId, int carNumber, string teamName, decimal ballastKg);
-    IEnumerable<Registration> GetByLeague(int leagueId);
-    // Private zone: the leagues a given driver has joined (their own memberships).
-    IEnumerable<Registration> GetByUser(int userId);
-    Registration GetById(int id);
-    void Delete(int id);
+    Task<Registration> RegisterAsync(int userId, int leagueId, int carNumber, string teamName, decimal ballastKg, CancellationToken cancellationToken = default);
+    Task<bool> IsMemberAsync(int userId, int leagueId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<Registration>> GetByLeagueAsync(int leagueId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<Registration>> GetByUserAsync(int userId, CancellationToken cancellationToken = default);
+    Task<Registration> GetByIdAsync(int id, CancellationToken cancellationToken = default);
+    Task DeleteAsync(int id, CancellationToken cancellationToken = default);
 }

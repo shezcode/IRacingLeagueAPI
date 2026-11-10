@@ -1,83 +1,24 @@
 using IRacingLeague.Data;
 using IRacingLeague.Models;
 using IRacingLeague.Models.Dtos;
-
 namespace IRacingLeague.Business;
 
-public class LeagueService : ILeagueService
+public sealed class LeagueService(ILeagueRepository repository, IRegistrationService registrations, IRaceService races, IUnitOfWork unitOfWork) : ILeagueService
 {
-    private readonly ILeagueRepository _repository;
-    private readonly IRegistrationService _registrations;
-    private readonly IRaceService _races;
-
-    public LeagueService(ILeagueRepository repository, IRegistrationService registrations, IRaceService races)
+    public async Task<League> CreateAsync(string name, string discipline, bool isPublic, int maxDrivers, decimal entryFee, int ownerUserId = 0, CancellationToken cancellationToken = default)
+    { var league = new League(name, discipline, isPublic, maxDrivers, entryFee, ownerUserId); await repository.AddAsync(league, cancellationToken); await unitOfWork.SaveChangesAsync(cancellationToken); return league; }
+    public Task<IReadOnlyList<League>> GetPublicAsync(LeagueQueryParameters parameters, CancellationToken cancellationToken = default) => repository.GetPublicAsync(parameters, cancellationToken);
+    public async Task<League> GetByIdAsync(int id, CancellationToken cancellationToken = default) => await repository.GetAsync(id, cancellationToken) ?? throw new NotFoundException($"League with id {id} not found.");
+    public async Task UpdateAsync(League league, CancellationToken cancellationToken = default)
+    { if (await repository.GetAsync(league.LeagueId, cancellationToken) is null) throw new NotFoundException($"League with id {league.LeagueId} not found."); await repository.UpdateAsync(league, cancellationToken); await unitOfWork.SaveChangesAsync(cancellationToken); }
+    public async Task DeleteAsync(int id, CancellationToken cancellationToken = default)
     {
-        _repository = repository;
-        _registrations = registrations;
-        _races = races;
-    }
-
-    public League Create(string name, string discipline, bool isPublic, int maxDrivers, decimal entryFee, int ownerUserId = 0)
-    {
-        var league = new League(name, discipline, isPublic, maxDrivers, entryFee, ownerUserId);
-        _repository.Add(league);
-        _repository.SaveChanges();
-        return league;
-    }
-
-    // Filter/sort applied over the repository's IQueryable so the predicates translate
-    // to SQL and run in the database. The public-zone constraint (IsPublic) is pinned
-    // here and never client-toggleable, so a private league can't leak through the list.
-    public IEnumerable<League> GetPublic(LeagueQueryParameters p)
-    {
-        var q = _repository.Query().Where(l => l.IsPublic);
-
-        if (!string.IsNullOrWhiteSpace(p.Discipline))
-            q = q.Where(l => l.Discipline == p.Discipline);   // case-insensitive via DB collation
-
-        q = p.SortBy?.ToLowerInvariant() switch
+        if (await repository.GetAsync(id, cancellationToken) is null) throw new NotFoundException($"League with id {id} not found.");
+        await unitOfWork.ExecuteInTransactionAsync(async ct =>
         {
-            "entryfee" => p.Desc ? q.OrderByDescending(l => l.EntryFee) : q.OrderBy(l => l.EntryFee),
-            "createdat" => p.Desc ? q.OrderByDescending(l => l.CreatedAt) : q.OrderBy(l => l.CreatedAt),
-            "maxdrivers" => p.Desc ? q.OrderByDescending(l => l.MaxDrivers) : q.OrderBy(l => l.MaxDrivers),
-            _ => p.Desc ? q.OrderByDescending(l => l.Name) : q.OrderBy(l => l.Name),
-        };
-
-        return q.ToList();
-    }
-
-    public League GetById(int id)
-    {
-        var league = _repository.Get(id);
-        if (league == null)
-            throw new NotFoundException($"League with id {id} not found.");
-        return league;
-    }
-
-    public void Update(League league)
-    {
-        if (_repository.Get(league.LeagueId) == null)
-            throw new NotFoundException($"League with id {league.LeagueId} not found.");
-        _repository.Update(league);
-        _repository.SaveChanges();
-    }
-
-    public void Delete(int id)
-    {
-        if (_repository.Get(id) == null)
-            throw new NotFoundException($"League with id {id} not found.");
-
-        // Cascade through the lower-level deletes so each registration's and race's results
-        // are removed (reversing their stat contributions) before the league itself goes.
-        // Registrations first: that clears every result in the league, so the race deletes
-        // below find none left. FKs are Restrict, so children must be gone before the parent.
-        foreach (var registration in _registrations.GetByLeague(id).ToList())
-            _registrations.Delete(registration.RegistrationId);
-
-        foreach (var race in _races.GetByLeague(id).ToList())
-            _races.Delete(race.RaceId);
-
-        _repository.Delete(id);
-        _repository.SaveChanges();
+            foreach (var member in await registrations.GetByLeagueAsync(id, ct)) await registrations.DeleteAsync(member.RegistrationId, ct);
+            foreach (var race in await races.GetByLeagueAsync(id, new RaceQueryParameters(), ct)) await races.DeleteAsync(race.RaceId, ct);
+            await repository.DeleteAsync(id, ct);
+        }, cancellationToken);
     }
 }

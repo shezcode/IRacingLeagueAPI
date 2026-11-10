@@ -1,37 +1,14 @@
 using IRacingLeague.Business;
 using IRacingLeague.Models.Dtos;
 using Microsoft.AspNetCore.Mvc;
-
 namespace IRacingLeague.API.Controllers;
 
 [ApiController]
 [Route("auth")]
-public class AuthController : ControllerBase
+public sealed class AuthController(IAuthService auth) : ControllerBase
 {
-    private readonly IAuthService _auth;
-    private readonly ILogger<AuthController> _logger;
-
-    public AuthController(IAuthService auth, ILogger<AuthController> logger)
-    {
-        _auth = auth;
-        _logger = logger;
-    }
-
     [HttpPost("register")]
-    public IActionResult Register([FromBody] UserDtoIn dto)
-    {
-
-            var token = _auth.Register(dto);
-            return Ok(new { token });
-
-    }
-
+    public async Task<IActionResult> Register([FromBody] UserDtoIn dto, CancellationToken cancellationToken) => Ok(new { token = await auth.RegisterAsync(dto, cancellationToken) });
     [HttpPost("login")]
-    public IActionResult Login([FromBody] LoginDtoIn dto)
-    {
-
-            var token = _auth.Login(dto);
-            return Ok(new { token });
-
-    }
+    public async Task<IActionResult> Login([FromBody] LoginDtoIn dto, CancellationToken cancellationToken) => Ok(new { token = await auth.LoginAsync(dto, cancellationToken) });
 }

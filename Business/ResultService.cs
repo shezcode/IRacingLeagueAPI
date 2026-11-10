@@ -1,130 +1,40 @@
 using IRacingLeague.Data;
 using IRacingLeague.Models;
-
 namespace IRacingLeague.Business;
 
-public class ResultService : IResultService
+public sealed class ResultService(IResultRepository results, IRegistrationRepository registrations, IUserRepository users, IUnitOfWork unitOfWork) : IResultService
 {
-    private readonly IResultRepository _results;
-    private readonly IRegistrationRepository _registrations;
-    private readonly IUserRepository _users;
-
-    public ResultService(IResultRepository results, IRegistrationRepository registrations, IUserRepository users)
+    public async Task<Result> ApplyResultAsync(Registration registration, Race race, Result result, CancellationToken cancellationToken = default)
     {
-        _results = results;
-        _registrations = registrations;
-        _users = users;
-    }
-
-    public Result ApplyResult(Registration registration, Race race, Result result)
-    {
-        var user = _users.Get(registration.UserId)
-            ?? throw new NotFoundException($"User with id {registration.UserId} not found.");
-
-        // At most one result per driver per race: re-entering updates in place
-        // instead of inserting a duplicate that would double-count points and stats.
-        var existingId = _results.GetAll()
-            .FirstOrDefault(r => r.RegistrationId == registration.RegistrationId && r.RaceId == race.RaceId)
-            ?.ResultId;
-
-        if (existingId is not null)
+        var user = await users.GetAsync(registration.UserId, cancellationToken) ?? throw new NotFoundException($"User with id {registration.UserId} not found.");
+        var existing = await results.FindForRaceAndRegistrationAsync(race.RaceId, registration.RegistrationId, cancellationToken);
+        await unitOfWork.ExecuteInTransactionAsync(async ct =>
         {
-            // Re-fetch tracked (Find) so a result the caller already loaded resolves to the
-            // same instance rather than a second copy that would collide on its key.
-            var existing = _results.Get(existingId.Value)!;
-
-            // Back out the previous contribution before applying the new values.
-            registration.AddPoints(result.Points - existing.Points);
-            user.UndoRaceOutcome(existing.Position, existing.IncidentPoints);
-            user.ApplyRaceOutcome(result.Position, result.IncidentPoints);
-
-            // Overwrite the existing row in place.
-            existing.Position = result.Position;
-            existing.FastestLapSeconds = result.FastestLapSeconds;
-            existing.Points = result.Points;
-            existing.IncidentPoints = result.IncidentPoints;
-            existing.Dnf = result.Dnf;
-            existing.Notes = result.Notes;
-            existing.FinishedAt = result.FinishedAt;
-            _results.Update(existing);
-            result = existing;
-        }
-        else
-        {
-            // First result for this driver/race: persist it and apply the contribution.
-            result.RegistrationId = registration.RegistrationId;
-            result.RaceId = race.RaceId;
-            _results.Add(result);
-
-            registration.AddPoints(result.Points);
-            user.ApplyRaceOutcome(result.Position, result.IncidentPoints);
-        }
-        _results.SaveChanges();
-
-        _registrations.Update(registration);
-        _registrations.SaveChanges();
-
-        _users.Update(user);
-        _users.SaveChanges();
-
-        return result;
-    }
-
-    public IEnumerable<Result> GetByRace(int raceId) =>
-        _results.GetAll().Where(r => r.RaceId == raceId).OrderBy(r => r.Position).ToList();
-
-    public Result GetById(int id)
-    {
-        var result = _results.Get(id);
-        if (result == null)
-            throw new NotFoundException($"Result with id {id} not found.");
-        return result;
-    }
-
-    public void Delete(int id)
-    {
-        var result = _results.Get(id)
-            ?? throw new NotFoundException($"Result with id {id} not found.");
-        BackOut(result);
-        _results.SaveChanges();
-    }
-
-    public void DeleteForRace(int raceId)
-    {
-        var results = _results.GetAll().Where(r => r.RaceId == raceId).ToList();
-        foreach (var result in results)
-            BackOut(result);
-        _results.SaveChanges();   // shared DbContext: one flush persists every back-out and removal
-    }
-
-    public void DeleteForRegistration(int registrationId)
-    {
-        var results = _results.GetAll().Where(r => r.RegistrationId == registrationId).ToList();
-        foreach (var result in results)
-            BackOut(result);
-        _results.SaveChanges();
-    }
-
-    // Exact inverse of ApplyResult's first-application path: undo the points/iRating/SR/wins
-    // contribution this result made, then remove the row. The tracked registration and user
-    // (fetched via Get/Find) accumulate correctly when several results share them, so a whole
-    // race or registration can be backed out in one pass.
-    private void BackOut(Result result)
-    {
-        var registration = _registrations.Get(result.RegistrationId);
-        if (registration is not null)
-        {
-            registration.AddPoints(-result.Points);
-            _registrations.Update(registration);
-
-            var user = _users.Get(registration.UserId);
-            if (user is not null)
+            if (existing is not null)
             {
-                user.UndoRaceOutcome(result.Position, result.IncidentPoints);
-                _users.Update(user);
+                registration.AddPoints(result.Points - existing.Points); user.UndoRaceOutcome(existing.Position, existing.IncidentPoints); user.ApplyRaceOutcome(result.Position, result.IncidentPoints);
+                existing.Position = result.Position; existing.FastestLapSeconds = result.FastestLapSeconds; existing.Points = result.Points; existing.IncidentPoints = result.IncidentPoints; existing.Dnf = result.Dnf; existing.Notes = result.Notes; existing.FinishedAt = result.FinishedAt;
+                await results.UpdateAsync(existing, ct); result = existing;
             }
-        }
-
-        _results.Delete(result.ResultId);
+            else
+            {
+                result.RegistrationId = registration.RegistrationId; result.RaceId = race.RaceId; await results.AddAsync(result, ct); registration.AddPoints(result.Points); user.ApplyRaceOutcome(result.Position, result.IncidentPoints);
+            }
+            await registrations.UpdateAsync(registration, ct); await users.UpdateAsync(user, ct);
+        }, cancellationToken);
+        return result;
+    }
+    public Task<IReadOnlyList<Result>> GetByRaceAsync(int raceId, CancellationToken cancellationToken = default) => results.GetByRaceAsync(raceId, cancellationToken);
+    public async Task<Result> GetByIdAsync(int id, CancellationToken cancellationToken = default) => await results.GetAsync(id, cancellationToken) ?? throw new NotFoundException($"Result with id {id} not found.");
+    public async Task DeleteAsync(int id, CancellationToken cancellationToken = default)
+    { if (await results.GetAsync(id, cancellationToken) is null) throw new NotFoundException($"Result with id {id} not found."); await unitOfWork.ExecuteInTransactionAsync(ct => BackOutAsync(id, ct), cancellationToken); }
+    public Task DeleteForRaceAsync(int raceId, CancellationToken cancellationToken = default) => unitOfWork.ExecuteInTransactionAsync(async ct => { foreach (var result in await results.GetByRaceAsync(raceId, ct)) await BackOutAsync(result.ResultId, ct); }, cancellationToken);
+    public Task DeleteForRegistrationAsync(int registrationId, CancellationToken cancellationToken = default) => unitOfWork.ExecuteInTransactionAsync(async ct => { foreach (var result in await results.GetByRegistrationAsync(registrationId, ct)) await BackOutAsync(result.ResultId, ct); }, cancellationToken);
+    private async Task BackOutAsync(int resultId, CancellationToken ct)
+    {
+        var result = await results.GetAsync(resultId, ct); if (result is null) return;
+        var registration = await registrations.GetAsync(result.RegistrationId, ct);
+        if (registration is not null) { registration.AddPoints(-result.Points); await registrations.UpdateAsync(registration, ct); var user = await users.GetAsync(registration.UserId, ct); if (user is not null) { user.UndoRaceOutcome(result.Position, result.IncidentPoints); await users.UpdateAsync(user, ct); } }
+        await results.DeleteAsync(result.ResultId, ct);
     }
 }

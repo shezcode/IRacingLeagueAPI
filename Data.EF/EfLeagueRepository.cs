@@ -1,43 +1,31 @@
+using IRacingLeague.Data;
 using IRacingLeague.Models;
+using IRacingLeague.Models.Dtos;
 using Microsoft.EntityFrameworkCore;
 
 namespace IRacingLeague.Data.EF;
 
-public class EfLeagueRepository : ILeagueRepository
+public sealed class EfLeagueRepository(AppDbContext context) : ILeagueRepository
 {
-    private readonly AppDbContext _context;
-
-    public EfLeagueRepository(AppDbContext context) => _context = context;
-
     public Task AddAsync(League league, CancellationToken cancellationToken = default)
+    { cancellationToken.ThrowIfCancellationRequested(); context.Leagues.Add(league); return Task.CompletedTask; }
+    public Task<League?> GetAsync(int id, CancellationToken cancellationToken = default) => context.Leagues.FindAsync([id], cancellationToken).AsTask();
+    public async Task<IReadOnlyList<League>> GetPublicAsync(LeagueQueryParameters p, CancellationToken cancellationToken = default)
     {
-        cancellationToken.ThrowIfCancellationRequested();
-        _context.Leagues.Add(league);
-        return Task.CompletedTask;
+        var q = context.Leagues.AsNoTracking().Where(l => l.IsPublic);
+        if (!string.IsNullOrWhiteSpace(p.Discipline)) q = q.Where(l => l.Discipline.ToLower() == p.Discipline.ToLower());
+        q = p.SortBy?.ToLowerInvariant() switch
+        {
+            "entryfee" => p.Desc ? q.OrderByDescending(l => l.EntryFee) : q.OrderBy(l => l.EntryFee),
+            "createdat" => p.Desc ? q.OrderByDescending(l => l.CreatedAt) : q.OrderBy(l => l.CreatedAt),
+            "maxdrivers" => p.Desc ? q.OrderByDescending(l => l.MaxDrivers) : q.OrderBy(l => l.MaxDrivers),
+            _ => p.Desc ? q.OrderByDescending(l => l.Name) : q.OrderBy(l => l.Name)
+        };
+        return await q.ToListAsync(cancellationToken);
     }
-
-    public Task<League?> GetAsync(int id, CancellationToken cancellationToken = default) =>
-        _context.Leagues.FindAsync(new object[] { id }, cancellationToken).AsTask();
-
-    public async Task<IReadOnlyList<League>> GetAllAsync(CancellationToken cancellationToken = default) =>
-        await _context.Leagues.AsNoTracking().ToListAsync(cancellationToken);
-
-    public void Add(League league) => _context.Leagues.Add(league);
-
-    public League? Get(int id) => _context.Leagues.Find(id);
-
-    public IEnumerable<League> GetAll() => _context.Leagues.AsNoTracking().ToList();
-
-    public IQueryable<League> Query() => _context.Leagues.AsNoTracking();
-
-    public void Update(League league) => _context.Leagues.Update(league);
-
-    public void Delete(int id)
-    {
-        var league = _context.Leagues.Find(id);
-        if (league is not null)
-            _context.Leagues.Remove(league);
-    }
-
-    public Task SaveChangesAsync(CancellationToken cancellationToken = default) => _context.SaveChangesAsync(cancellationToken);
+    public Task<int> CountOwnedByAsync(int userId, CancellationToken cancellationToken = default) => context.Leagues.CountAsync(l => l.OwnerUserId == userId, cancellationToken);
+    public Task UpdateAsync(League league, CancellationToken cancellationToken = default)
+    { cancellationToken.ThrowIfCancellationRequested(); context.Leagues.Update(league); return Task.CompletedTask; }
+    public async Task DeleteAsync(int id, CancellationToken cancellationToken = default)
+    { var league = await context.Leagues.FindAsync([id], cancellationToken); if (league is not null) context.Leagues.Remove(league); }
 }

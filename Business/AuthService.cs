@@ -6,88 +6,32 @@ using IRacingLeague.Models;
 using IRacingLeague.Models.Dtos;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
-
 namespace IRacingLeague.Business;
 
-public class AuthService : IAuthService
+public class AuthService(IConfiguration configuration, IUserRepository users, IUnitOfWork unitOfWork) : IAuthService
 {
-    private readonly IConfiguration _configuration;
-    private readonly IUserRepository _users;
-
-    public AuthService(IConfiguration configuration, IUserRepository users)
+    public async Task<string> RegisterAsync(UserDtoIn dto, CancellationToken cancellationToken = default)
     {
-        _configuration = configuration;
-        _users = users;
-    }
-
-    public string Register(UserDtoIn dto)
-    {
-        // Email is unique; reject duplicates with a friendly error
-        // rather than letting the DB throw on SaveChanges.
-        if (_users.GetAll().Any(u => u.Email.Equals(dto.Email, StringComparison.OrdinalIgnoreCase)))
-            throw new ConflictException($"An account already exists for '{dto.Email}'.");
-
-        var user = new User(dto.UserName, dto.Email, HashPassword(dto.Password),
-                            Roles.Driver.ToString(), dto.Tag, dto.LicenseClass);
-        _users.Add(user);
-        _users.SaveChanges();   // populates user.UserId
-
+        if (await users.EmailExistsAsync(dto.Email, cancellationToken)) throw new ConflictException($"An account already exists for '{dto.Email}'.");
+        var user = new User(dto.UserName, dto.Email, HashPassword(dto.Password), Roles.Driver.ToString(), dto.Tag, dto.LicenseClass);
+        await users.AddAsync(user, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
         return GenerateToken(UserDTOOut.FromEntity(user));
     }
-
-    public string Login(LoginDtoIn dto)
+    public async Task<string> LoginAsync(LoginDtoIn dto, CancellationToken cancellationToken = default)
     {
-        var user = _users.GetAll()
-            .FirstOrDefault(u => u.Email.Equals(dto.Email, StringComparison.OrdinalIgnoreCase));
-
-        // Same error for unknown email and wrong password, so the response can't be used
-        // to probe which emails are registered.
-        if (user is null || user.Password != HashPassword(dto.Password))
-            throw new UnauthorizedAccessException("Invalid email or password.");
-
+        var user = await users.FindByEmailAsync(dto.Email, cancellationToken);
+        if (user is null || user.Password != HashPassword(dto.Password)) throw new UnauthorizedAccessException("Invalid email or password.");
         return GenerateToken(UserDTOOut.FromEntity(user));
     }
-
-
-
     public string GenerateToken(UserDTOOut user)
     {
-        var secret = _configuration["JWT:SecretKey"]
-            ?? throw new InvalidOperationException("JWT:SecretKey is not configured.");
+        var secret = configuration["JWT:SecretKey"] ?? throw new InvalidOperationException("JWT:SecretKey is not configured.");
         var key = Encoding.UTF8.GetBytes(secret);
-
-        var tokenDescriptor = new SecurityTokenDescriptor
-        {
-            Issuer = _configuration["JWT:ValidIssuer"],
-            Audience = _configuration["JWT:ValidAudience"],
-            Subject = new ClaimsIdentity(new[]
-            {
-                new Claim(ClaimTypes.NameIdentifier, user.UserId.ToString()),
-                new Claim(ClaimTypes.Name, user.UserName),
-                new Claim(ClaimTypes.Role, user.Role),
-                new Claim(ClaimTypes.Email, user.Email),
-            }),
-            Expires = DateTime.UtcNow.AddDays(7),
-            SigningCredentials = new SigningCredentials(
-                new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
-        };
-
-        var handler = new JwtSecurityTokenHandler();
-        return handler.WriteToken(handler.CreateToken(tokenDescriptor));
+        var descriptor = new SecurityTokenDescriptor { Issuer = configuration["JWT:ValidIssuer"], Audience = configuration["JWT:ValidAudience"], Subject = new ClaimsIdentity(new[] { new Claim(ClaimTypes.NameIdentifier, user.UserId.ToString()), new Claim(ClaimTypes.Name, user.UserName), new Claim(ClaimTypes.Role, user.Role), new Claim(ClaimTypes.Email, user.Email) }), Expires = DateTime.UtcNow.AddDays(7), SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature) };
+        var handler = new JwtSecurityTokenHandler(); return handler.WriteToken(handler.CreateToken(descriptor));
     }
-
     public string HashPassword(string password) => PasswordHasher.Hash(password);
-
-    public int? GetUserId(ClaimsPrincipal user)
-    {
-        var claim = user.FindFirst(ClaimTypes.NameIdentifier);
-        return claim is not null && int.TryParse(claim.Value, out int id) ? id : null;
-    }
-
-    public bool HasAccessToResource(int ownerUserId, ClaimsPrincipal user)
-    {
-        var isOwner = GetUserId(user) == ownerUserId;
-        var isAdmin = user.IsInRole(Roles.Admin.ToString());
-        return isOwner || isAdmin;
-    }
+    public int? GetUserId(ClaimsPrincipal user) { var claim = user.FindFirst(ClaimTypes.NameIdentifier); return claim is not null && int.TryParse(claim.Value, out var id) ? id : null; }
+    public bool HasAccessToResource(int ownerUserId, ClaimsPrincipal user) => GetUserId(user) == ownerUserId || user.IsInRole(Roles.Admin.ToString());
 }
