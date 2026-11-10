@@ -78,6 +78,53 @@ namespace IRacingLeague.Data.EF.Migrations
                     b.ToTable("Leagues");
                 });
 
+            modelBuilder.Entity("IRacingLeague.Models.LeagueInvite", b =>
+                {
+                    b.Property<int>("LeagueInviteId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("LeagueInviteId"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("CreatedByUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("LeagueId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("UsedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("UsedByUserId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("LeagueInviteId");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("UsedByUserId");
+
+                    b.HasIndex("LeagueId", "CreatedAt");
+
+                    b.ToTable("LeagueInvites");
+                });
+
             modelBuilder.Entity("IRacingLeague.Models.Race", b =>
                 {
                     b.Property<int>("RaceId")
@@ -345,6 +392,25 @@ namespace IRacingLeague.Data.EF.Migrations
                         .HasForeignKey("OwnerUserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("IRacingLeague.Models.LeagueInvite", b =>
+                {
+                    b.HasOne("IRacingLeague.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("IRacingLeague.Models.League", null)
+                        .WithMany()
+                        .HasForeignKey("LeagueId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("IRacingLeague.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("UsedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
                 });
 
             modelBuilder.Entity("IRacingLeague.Models.Race", b =>

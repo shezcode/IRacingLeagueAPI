@@ -16,4 +16,6 @@ public class RegistrationCreateDTO
 
     [Range(0, 200)]
     public decimal BallastKg { get; set; }
+
+    public string? InviteToken { get; set; }
 }

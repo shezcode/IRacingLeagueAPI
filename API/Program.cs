@@ -123,6 +123,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddScoped<ILeagueRepository, EfLeagueRepository>();
 builder.Services.AddScoped<IRaceRepository, EfRaceRepository>();
 builder.Services.AddScoped<IRegistrationRepository, EfRegistrationRepository>();
+builder.Services.AddScoped<ILeagueInviteRepository, EfLeagueInviteRepository>();
 builder.Services.AddScoped<IResultRepository, EfResultRepository>();
 builder.Services.AddScoped<IRatingReplayRepository, EfRatingReplayRepository>();
 builder.Services.AddScoped<IUserRepository, EfUserRepository>();

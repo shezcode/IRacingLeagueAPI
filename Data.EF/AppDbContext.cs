@@ -13,6 +13,7 @@ public class AppDbContext : DbContext
     public DbSet<Race> Races => Set<Race>();
     public DbSet<Result> Results => Set<Result>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<LeagueInvite> LeagueInvites => Set<LeagueInvite>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -22,6 +23,12 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<RefreshToken>().HasIndex(t => t.FamilyId);
         modelBuilder.Entity<RefreshToken>().HasOne<User>().WithMany().HasForeignKey(t => t.UserId).OnDelete(DeleteBehavior.Cascade);
         modelBuilder.Entity<League>().HasKey(l => l.LeagueId);
+        modelBuilder.Entity<LeagueInvite>().HasKey(i => i.LeagueInviteId);
+        modelBuilder.Entity<LeagueInvite>().HasIndex(i => i.TokenHash).IsUnique();
+        modelBuilder.Entity<LeagueInvite>().HasIndex(i => new { i.LeagueId, i.CreatedAt });
+        modelBuilder.Entity<LeagueInvite>().HasOne<League>().WithMany().HasForeignKey(i => i.LeagueId).OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<LeagueInvite>().HasOne<User>().WithMany().HasForeignKey(i => i.CreatedByUserId).OnDelete(DeleteBehavior.SetNull);
+        modelBuilder.Entity<LeagueInvite>().HasOne<User>().WithMany().HasForeignKey(i => i.UsedByUserId).OnDelete(DeleteBehavior.SetNull);
         modelBuilder.Entity<League>().Property(l => l.Version).HasColumnName("xmin").IsRowVersion();
         modelBuilder.Entity<Registration>().HasKey(r => r.RegistrationId);
         modelBuilder.Entity<Registration>().HasIndex(r => new { r.LeagueId, r.UserId }).IsUnique();

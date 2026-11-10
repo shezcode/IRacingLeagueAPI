@@ -60,9 +60,51 @@ public sealed class RegistrationsController(IRegistrationService service, IStand
             if (!auth.HasAccessToResource(league.OwnerUserId, User)) throw new ForbiddenException("You do not have access to this resource.");
             await users.GetByIdAsync(targetId, ct);
         }
-        else if (!league.IsPublic) throw new ForbiddenException("You cannot join a private league without an invitation.");
-        var registration = await service.RegisterAsync(targetId, leagueId, dto.CarNumber, dto.TeamName, dto.BallastKg, ct);
+        var registration = await service.RegisterAsync(targetId, leagueId, dto.CarNumber, dto.TeamName, dto.BallastKg, dto.InviteToken, targetId == callerId, ct);
         return CreatedAtAction(nameof(GetMembers), new { leagueId }, RegistrationReadDTO.FromEntity(registration));
+    }
+
+    /// <summary>Creates a single-use invite for the league.</summary>
+    [HttpPost("invites")]
+    [Authorize]
+    [ProducesResponseType(typeof(LeagueInviteCreatedDTO), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<LeagueInviteCreatedDTO>> CreateInvite(int leagueId, [FromBody] LeagueInviteCreateDTO dto, CancellationToken ct)
+    {
+        var league = await leagues.GetByIdAsync(leagueId, ct);
+        if (!auth.HasAccessToResource(league.OwnerUserId, User)) throw new ForbiddenException("You do not have access to this resource.");
+        var creator = auth.GetUserId(User) ?? throw new UnauthorizedAccessException("Authentication is required.");
+        var created = await service.CreateInviteAsync(leagueId, creator, dto.ExpiresInHours, ct);
+        return StatusCode(StatusCodes.Status201Created, new LeagueInviteCreatedDTO(created.Token, created.CreatedAt, created.ExpiresAt));
+    }
+
+    /// <summary>Lists invite metadata without exposing token values.</summary>
+    [HttpGet("invites")]
+    [Authorize]
+    [ProducesResponseType(typeof(IReadOnlyList<LeagueInviteReadDTO>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<IReadOnlyList<LeagueInviteReadDTO>>> GetInvites(int leagueId, CancellationToken ct)
+    {
+        var league = await leagues.GetByIdAsync(leagueId, ct);
+        if (!auth.HasAccessToResource(league.OwnerUserId, User)) throw new ForbiddenException("You do not have access to this resource.");
+        var invites = await service.GetInvitesAsync(leagueId, ct);
+        return Ok(invites.Select(x => new LeagueInviteReadDTO(x.LeagueInviteId, x.CreatedAt, x.ExpiresAt, x.UsedAt, x.UsedByUserId, x.RevokedAt)).ToArray());
+    }
+
+    /// <summary>Revokes a league invite.</summary>
+    [HttpDelete("invites/{inviteId:int}")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> RevokeInvite(int leagueId, int inviteId, CancellationToken ct)
+    {
+        var league = await leagues.GetByIdAsync(leagueId, ct);
+        if (!auth.HasAccessToResource(league.OwnerUserId, User)) throw new ForbiddenException("You do not have access to this resource.");
+        await service.RevokeInviteAsync(leagueId, inviteId, ct);
+        return NoContent();
     }
 
     /// <summary>Removes a member from the league.</summary>
