@@ -10,6 +10,7 @@ public class League
     public decimal EntryFee { get; set; }
     public DateTime CreatedAt { get; set; }
     public int OwnerUserId { get; set; }
+    public uint Version { get; set; }
 
     // Parameterless ctor kept for JSON (de)serialization in a later step.
     public League() { }

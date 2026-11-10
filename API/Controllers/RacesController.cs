@@ -36,6 +36,7 @@ public sealed class RacesController(IRaceService service, ILeagueService leagues
     {
         var race = await service.GetByIdAsync(id, ct); var league = await leagues.GetByIdAsync(race.LeagueId, ct);
         if (!await viewPolicy.CanViewAsync(league, User, ct)) throw new ForbiddenException("You do not have access to this resource.");
+        Response.Headers.ETag = ETag(race.Version);
         return Ok(RaceReadDTO.FromEntity(race));
     }
 
@@ -66,14 +67,19 @@ public sealed class RacesController(IRaceService service, ILeagueService leagues
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status412PreconditionFailed)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
-    public async Task<IActionResult> Update(int id, [FromBody] RaceUpdateDTO dto, CancellationToken ct)
+    public async Task<IActionResult> Update(int id, [FromBody] RaceUpdateDTO dto, [FromHeader(Name = "If-Match")] string? ifMatch, CancellationToken ct)
     {
         var race = await service.GetByIdAsync(id, ct); var league = await leagues.GetByIdAsync(race.LeagueId, ct);
         if (!auth.HasAccessToResource(league.OwnerUserId, User)) throw new ForbiddenException("You do not have access to this resource.");
+        if (!Matches(ifMatch, race.Version)) throw new PreconditionFailedException("The If-Match value does not match the current resource version.");
         race.Track = dto.Track; race.Car = dto.Car; race.ScheduledAt = dto.ScheduledAt; race.LapCount = dto.LapCount; race.AmbientTempC = dto.AmbientTempC; race.IsCompleted = dto.IsCompleted;
         await service.UpdateAsync(race, ct); return NoContent();
     }
+
+    private static string ETag(uint version) => $"\"{version}\"";
+    private static bool Matches(string? ifMatch, uint version) => ifMatch is null || ifMatch.Trim() == ETag(version);
 
     /// <summary>Deletes a race and its results.</summary>
     [HttpDelete("races/{id:int}")]

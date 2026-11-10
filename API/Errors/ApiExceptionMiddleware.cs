@@ -41,6 +41,8 @@ public sealed class ApiExceptionMiddleware(RequestDelegate next, ILogger<ApiExce
 
     private static (int Status, string Title, string Detail) Map(Exception exception) => exception switch
     {
+        PreconditionFailedException => (412, "Precondition Failed", exception.Message),
+        DbUpdateConcurrencyException => (412, "Precondition Failed", "The resource was modified by another request. Fetch the latest representation and retry."),
         NotFoundException or KeyNotFoundException => (404, "Not Found", exception.Message),
         ForbiddenException => (403, "Forbidden", exception.Message),
         ConflictException or UserOwnsLeaguesException => (409, "Conflict", exception.Message),
