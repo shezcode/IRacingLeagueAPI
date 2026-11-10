@@ -9,6 +9,9 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Reflection;
 using IRacingLeague.API.Swagger;
+using System.Net;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.HttpOverrides;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -59,6 +62,57 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 builder.Services.AddAuthorization();
 
+// Forwarded client addresses are accepted only from explicitly configured proxy
+// IPs. Set ForwardedHeaders:KnownProxies:0 (or ForwardedHeaders__KnownProxies__0)
+// for each trusted reverse proxy. With none configured, forwarded headers are ignored.
+var trustedProxyAddresses = builder.Configuration
+    .GetSection("ForwardedHeaders:KnownProxies")
+    .Get<string[]>() ?? Array.Empty<string>();
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor;
+    options.KnownProxies.Clear();
+    options.KnownIPNetworks.Clear();
+    foreach (var address in trustedProxyAddresses)
+    {
+        if (!IPAddress.TryParse(address, out var proxyAddress))
+            throw new InvalidOperationException($"Invalid trusted proxy IP address: '{address}'.");
+        options.KnownProxies.Add(proxyAddress);
+    }
+});
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
+    {
+        if (!context.Request.Path.StartsWithSegments("/api/v1/auth"))
+            return RateLimitPartition.GetNoLimiter("non-auth");
+
+        var clientIp = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(clientIp, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 10,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+            AutoReplenishment = true
+        });
+    });
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+        context.HttpContext.Response.ContentType = "application/problem+json";
+        var problem = new Microsoft.AspNetCore.Mvc.ProblemDetails
+        {
+            Type = "https://www.rfc-editor.org/rfc/rfc7807",
+            Title = "Too Many Requests",
+            Status = StatusCodes.Status429TooManyRequests,
+            Detail = "The authentication request limit has been reached. Try again later."
+        };
+        problem.Extensions["traceId"] = context.HttpContext.TraceIdentifier;
+        await context.HttpContext.Response.WriteAsJsonAsync(problem, cancellationToken);
+    };
+});
+
 // EF Core against PostgreSQL. The connection string is overridable via the
 // ConnectionStrings__ServerDB environment variable (used by Docker Compose in Step 20).
 builder.Services.AddDbContext<AppDbContext>(options =>
@@ -71,6 +125,7 @@ builder.Services.AddScoped<IRaceRepository, EfRaceRepository>();
 builder.Services.AddScoped<IRegistrationRepository, EfRegistrationRepository>();
 builder.Services.AddScoped<IResultRepository, EfResultRepository>();
 builder.Services.AddScoped<IUserRepository, EfUserRepository>();
+builder.Services.AddScoped<IRefreshTokenRepository, EfRefreshTokenRepository>();
 builder.Services.AddScoped<IUnitOfWork, EfUnitOfWork>();
 
 builder.Services.AddScoped<ILeagueService, LeagueService>();
@@ -122,6 +177,7 @@ builder.Services.AddSwaggerGen(options =>
 
 var app = builder.Build();
 app.UseMiddleware<ApiExceptionMiddleware>();
+app.UseForwardedHeaders();
 
 // Apply pending EF Core migrations on boot so the containerized DB is
 // schema-ready without a manual `dotnet ef database update`. Idempotent: a no-op when
@@ -153,6 +209,8 @@ app.UseSwaggerUI();
 app.MapGet("/", () => Results.Redirect("/swagger")).ExcludeFromDescription();
 
 // Authentication must run before authorization (Step 18 adds [Authorize] policies).
+app.UseRouting();
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 

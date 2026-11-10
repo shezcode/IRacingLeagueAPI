@@ -16,6 +16,4 @@ public class UserDtoIn
     [StringLength(20)]
     public string Tag { get; set; } = string.Empty;
 
-    [StringLength(10)]
-    public string LicenseClass { get; set; } = "Rookie";
 }
