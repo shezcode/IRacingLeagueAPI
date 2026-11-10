@@ -18,6 +18,10 @@ public class LeagueCreateDTO
     [Range(0, 100000)]
     public decimal EntryFee { get; set; }
 
+    public int[]? PointsTable { get; set; }
+
+    public int? FastestLapBonus { get; set; }
+
     // Owner is NOT taken from the body, the creating Driver becomes the owner, read
     // from the JWT identity in the controller. Kept off the DTO so a caller
     // can't create a league owned by someone else.

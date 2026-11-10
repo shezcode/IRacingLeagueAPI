@@ -1,6 +1,6 @@
 namespace IRacingLeague.Models.Dtos;
 
-public class LeagueQueryParameters
+public class LeagueQueryParameters : PaginationParameters
 {
     public string? Discipline { get; set; }
 

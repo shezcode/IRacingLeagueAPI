@@ -6,7 +6,7 @@ public class User
     public string UserName { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty;   // SHA256 hash in the API; plain placeholder in the CLI
-    public string Role { get; set; } = "Driver";            // Admin / Driver / Guest
+    public string Role { get; set; } = "Driver";            // Admin / Driver
     public string Tag { get; set; } = string.Empty;
     public int IRating { get; set; }                        // global, recomputed from results
     public decimal SafetyRating { get; set; }
@@ -14,6 +14,7 @@ public class User
     public bool IsActive { get; set; }
     public int TotalWins { get; set; }                      // global, recomputed
     public DateTime JoinedAt { get; set; }
+    public int RacesCompleted { get; set; }
 
     // Parameterless ctor kept for JSON (de)serialization in a later step.
     public User() { }
@@ -30,38 +31,7 @@ public class User
         SafetyRating = 2.50m;
         TotalWins = 0;
         IsActive = true;
-        JoinedAt = DateTime.Now;
+        JoinedAt = DateTime.UtcNow;
     }
 
-    public void ApplyRaceOutcome(int position, int incidentPoints)
-    {
-        int iRatingDelta = Math.Max(50 - (position - 1) * 10, -30);
-        IRating += iRatingDelta;
-
-        if (position == 1)
-            TotalWins++;
-
-        SafetyRating -= incidentPoints * 0.05m;
-        if (SafetyRating < 0m) SafetyRating = 0m;
-        if (SafetyRating > 4.99m) SafetyRating = 4.99m;
-    }
-
-    // Exact inverse of ApplyRaceOutcome, used when a result is re-entered so the
-    // previous contribution can be backed out before the new one is applied.
-    public void UndoRaceOutcome(int position, int incidentPoints)
-    {
-        int iRatingDelta = Math.Max(50 - (position - 1) * 10, -30);
-        IRating -= iRatingDelta;
-
-        if (position == 1)
-            TotalWins--;
-
-        SafetyRating += incidentPoints * 0.05m;
-        if (SafetyRating < 0m) SafetyRating = 0m;
-        if (SafetyRating > 4.99m) SafetyRating = 4.99m;
-    }
-
-    public override string ToString() =>
-        $"[{UserId}] {UserName} ({Tag}) — {Role}, license {LicenseClass}, " +
-        $"iR {IRating}, SR {SafetyRating:0.00}, wins {TotalWins}";
 }

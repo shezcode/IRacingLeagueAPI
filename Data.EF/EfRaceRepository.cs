@@ -1,30 +1,36 @@
+using IRacingLeague.Data;
 using IRacingLeague.Models;
+using IRacingLeague.Models.Dtos;
 using Microsoft.EntityFrameworkCore;
 
 namespace IRacingLeague.Data.EF;
 
-public class EfRaceRepository : IRaceRepository
+public sealed class EfRaceRepository(AppDbContext context) : IRaceRepository
 {
-    private readonly AppDbContext _context;
-
-    public EfRaceRepository(AppDbContext context) => _context = context;
-
-    public void Add(Race race) => _context.Races.Add(race);
-
-    public Race? Get(int id) => _context.Races.Find(id);
-
-    public IEnumerable<Race> GetAll() => _context.Races.AsNoTracking().ToList();
-
-    public IQueryable<Race> Query() => _context.Races.AsNoTracking();
-
-    public void Update(Race race) => _context.Races.Update(race);
-
-    public void Delete(int id)
+    public Task AddAsync(Race race, CancellationToken cancellationToken = default)
+    { cancellationToken.ThrowIfCancellationRequested(); context.Races.Add(race); return Task.CompletedTask; }
+    public Task<Race?> GetAsync(int id, CancellationToken cancellationToken = default) => context.Races.FindAsync([id], cancellationToken).AsTask();
+    public async Task<PagedResponse<Race>> GetByLeagueAsync(int leagueId, RaceQueryParameters p, CancellationToken cancellationToken = default)
     {
-        var race = _context.Races.Find(id);
-        if (race is not null)
-            _context.Races.Remove(race);
+        var q = context.Races.AsNoTracking().Where(r => r.LeagueId == leagueId);
+        if (!string.IsNullOrWhiteSpace(p.Track)) q = q.Where(r => r.Track.Contains(p.Track));
+        if (p.ScheduledFrom.HasValue) q = q.Where(r => r.ScheduledAt >= AsUtc(p.ScheduledFrom.Value));
+        if (p.ScheduledTo.HasValue) q = q.Where(r => r.ScheduledAt <= AsUtc(p.ScheduledTo.Value));
+        q = p.SortBy?.ToLowerInvariant() switch
+        {
+            "scheduledat" => p.Desc ? q.OrderByDescending(r => r.ScheduledAt) : q.OrderBy(r => r.ScheduledAt),
+            "track" => p.Desc ? q.OrderByDescending(r => r.Track) : q.OrderBy(r => r.Track),
+            _ => p.Desc ? q.OrderByDescending(r => r.Round) : q.OrderBy(r => r.Round)
+        };
+        var totalCount = await q.CountAsync(cancellationToken);
+        var items = await q.Skip((p.Page - 1) * p.PageSize).Take(p.PageSize).ToListAsync(cancellationToken);
+        return new PagedResponse<Race>(items, p.Page, p.PageSize, totalCount);
     }
-
-    public void SaveChanges() => _context.SaveChanges();
+    public async Task<IReadOnlyList<Race>> GetScheduledByLeagueAsync(int leagueId, CancellationToken cancellationToken = default) =>
+        await context.Races.Where(r => r.LeagueId == leagueId).OrderBy(r => r.ScheduledAt).ThenBy(r => r.RaceId).ToListAsync(cancellationToken);
+    public Task UpdateAsync(Race race, CancellationToken cancellationToken = default)
+    { cancellationToken.ThrowIfCancellationRequested(); context.Races.Update(race); return Task.CompletedTask; }
+    public async Task DeleteAsync(int id, CancellationToken cancellationToken = default)
+    { var race = await context.Races.FindAsync([id], cancellationToken); if (race is not null) context.Races.Remove(race); }
+    private static DateTime AsUtc(DateTime value) => value.Kind switch { DateTimeKind.Utc => value, DateTimeKind.Local => value.ToUniversalTime(), _ => DateTime.SpecifyKind(value, DateTimeKind.Utc) };
 }

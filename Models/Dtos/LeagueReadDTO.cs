@@ -10,6 +10,8 @@ public class LeagueReadDTO
     public decimal EntryFee { get; set; }
     public DateTime CreatedAt { get; set; }
     public int OwnerUserId { get; set; }
+    public int[] PointsTable { get; set; } = [];
+    public int FastestLapBonus { get; set; }
 
     public static LeagueReadDTO FromEntity(League league) => new()
     {
@@ -20,6 +22,8 @@ public class LeagueReadDTO
         MaxDrivers = league.MaxDrivers,
         EntryFee = league.EntryFee,
         CreatedAt = league.CreatedAt,
-        OwnerUserId = league.OwnerUserId
+        OwnerUserId = league.OwnerUserId,
+        PointsTable = league.PointsTable,
+        FastestLapBonus = league.FastestLapBonus
     };
 }

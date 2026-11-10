@@ -1,15 +1,13 @@
 using IRacingLeague.Models;
 using IRacingLeague.Models.Dtos;
-
 namespace IRacingLeague.Business;
 
 public interface IUserService
 {
-    User Create(string userName, string email, string password, string role, string tag, string licenseClass);
-    IEnumerable<User> GetAll();
-    IEnumerable<User> Query(UserQueryParameters parameters);
-    IEnumerable<User> SearchByTag(string tag);
-    User GetById(int id);
-    void Update(User user);
-    void Delete(int id);
+    Task<User> CreateAsync(string userName, string email, string password, string role, string tag, CancellationToken cancellationToken = default);
+    Task<PagedResponse<User>> QueryAsync(UserQueryParameters parameters, CancellationToken cancellationToken = default);
+    Task<User> GetByIdAsync(int id, CancellationToken cancellationToken = default);
+    Task<DriverStatsDTO> GetDriverStatsAsync(int id, int? viewerUserId, bool canViewAllPrivate, CancellationToken cancellationToken = default);
+    Task UpdateProfileAsync(int id, string userName, string tag, CancellationToken cancellationToken = default);
+    Task DeleteAsync(int id, CancellationToken cancellationToken = default);
 }

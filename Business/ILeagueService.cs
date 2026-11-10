@@ -1,20 +1,13 @@
 using IRacingLeague.Models;
 using IRacingLeague.Models.Dtos;
-
 namespace IRacingLeague.Business;
 
 public interface ILeagueService
 {
-    League Create(string name, string discipline, bool isPublic, int maxDrivers, decimal entryFee, int ownerUserId = 0);
-    IEnumerable<League> GetAll();
-    // Public zone: only leagues flagged public are visible to everyone.
-    IEnumerable<League> GetPublic();
-    // Public zone with filter/sort applied over IQueryable before materializing (Step 19).
-    IEnumerable<League> GetPublic(LeagueQueryParameters parameters);
-    // Private zone: leagues owned by a given driver (the league owner).
-    IEnumerable<League> GetOwnedBy(int ownerUserId);
-    IEnumerable<League> SearchByName(string name);
-    League GetById(int id);
-    void Update(League league);
-    void Delete(int id);
+    Task<League> CreateAsync(string name, string discipline, bool isPublic, int maxDrivers, decimal entryFee, int ownerUserId = 0, CancellationToken cancellationToken = default, int[]? pointsTable = null, int? fastestLapBonus = null);
+    Task<PagedResponse<League>> GetPublicAsync(LeagueQueryParameters parameters, CancellationToken cancellationToken = default);
+    Task<PagedResponse<League>> GetForUserAsync(int userId, PaginationParameters parameters, CancellationToken cancellationToken = default);
+    Task<League> GetByIdAsync(int id, CancellationToken cancellationToken = default);
+    Task UpdateAsync(League league, int[]? pointsTable = null, int? fastestLapBonus = null, CancellationToken cancellationToken = default);
+    Task DeleteAsync(int id, CancellationToken cancellationToken = default);
 }

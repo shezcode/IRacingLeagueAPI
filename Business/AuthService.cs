@@ -1,5 +1,6 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
 using IRacingLeague.Data;
 using IRacingLeague.Models;
@@ -9,85 +10,91 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace IRacingLeague.Business;
 
-public class AuthService : IAuthService
+public class AuthService(IConfiguration configuration, IUserRepository users, IRefreshTokenRepository refreshTokens, IUnitOfWork unitOfWork) : IAuthService
 {
-    private readonly IConfiguration _configuration;
-    private readonly IUserRepository _users;
+    private static readonly TimeSpan AccessLifetime = TimeSpan.FromMinutes(15);
+    private static readonly TimeSpan RefreshLifetime = TimeSpan.FromDays(14);
 
-    public AuthService(IConfiguration configuration, IUserRepository users)
+    public async Task<AuthTokenResponse> RegisterAsync(UserDtoIn dto, CancellationToken cancellationToken = default)
     {
-        _configuration = configuration;
-        _users = users;
+        if (await users.EmailExistsAsync(dto.Email, cancellationToken)) throw new ConflictException($"An account already exists for '{dto.Email}'.");
+        var user = new User(dto.UserName, dto.Email, HashPassword(dto.Password), Roles.Driver.ToString(), dto.Tag, "Rookie");
+        await users.AddAsync(user, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        return await IssueTokensAsync(user, Guid.NewGuid(), cancellationToken);
     }
 
-    public string Register(UserDtoIn dto)
+    public async Task<AuthTokenResponse> LoginAsync(LoginDtoIn dto, CancellationToken cancellationToken = default)
     {
-        // Email is unique; reject duplicates with a friendly error
-        // rather than letting the DB throw on SaveChanges.
-        if (_users.GetAll().Any(u => u.Email.Equals(dto.Email, StringComparison.OrdinalIgnoreCase)))
-            throw new InvalidOperationException($"An account already exists for '{dto.Email}'.");
-
-        var user = new User(dto.UserName, dto.Email, HashPassword(dto.Password),
-                            Roles.Driver.ToString(), dto.Tag, dto.LicenseClass);
-        _users.Add(user);
-        _users.SaveChanges();   // populates user.UserId
-
-        return GenerateToken(UserDTOOut.FromEntity(user));
+        var user = await users.FindByEmailAsync(dto.Email, cancellationToken);
+        if (user is null || !PasswordHasher.Verify(user.Password, dto.Password)) throw new UnauthorizedAccessException("Invalid email or password.");
+        return await IssueTokensAsync(user, Guid.NewGuid(), cancellationToken);
     }
 
-    public string Login(LoginDtoIn dto)
+    public async Task<AuthTokenResponse> RefreshAsync(string refreshToken, CancellationToken cancellationToken = default)
     {
-        var user = _users.GetAll()
-            .FirstOrDefault(u => u.Email.Equals(dto.Email, StringComparison.OrdinalIgnoreCase));
-
-        // Same error for unknown email and wrong password, so the response can't be used
-        // to probe which emails are registered.
-        if (user is null || user.Password != HashPassword(dto.Password))
-            throw new UnauthorizedAccessException("Invalid email or password.");
-
-        return GenerateToken(UserDTOOut.FromEntity(user));
-    }
-
-
-
-    public string GenerateToken(UserDTOOut user)
-    {
-        var secret = _configuration["JWT:SecretKey"]
-            ?? throw new InvalidOperationException("JWT:SecretKey is not configured.");
-        var key = Encoding.UTF8.GetBytes(secret);
-
-        var tokenDescriptor = new SecurityTokenDescriptor
+        var rawHash = HashRefreshToken(refreshToken);
+        AuthTokenResponse? response = null;
+        var reused = false;
+        await unitOfWork.ExecuteInTransactionAsync(async ct =>
         {
-            Issuer = _configuration["JWT:ValidIssuer"],
-            Audience = _configuration["JWT:ValidAudience"],
-            Subject = new ClaimsIdentity(new[]
+            var stored = await refreshTokens.FindForUpdateByHashAsync(rawHash, ct);
+            if (stored is null) return;
+            if (stored.RevokedAt.HasValue)
             {
-                new Claim(ClaimTypes.NameIdentifier, user.UserId.ToString()),
-                new Claim(ClaimTypes.Name, user.UserName),
-                new Claim(ClaimTypes.Role, user.Role),
-                new Claim(ClaimTypes.Email, user.Email),
-            }),
-            Expires = DateTime.UtcNow.AddDays(7),
-            SigningCredentials = new SigningCredentials(
-                new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
-        };
+                await refreshTokens.RevokeFamilyAsync(stored.FamilyId, DateTime.UtcNow, ct);
+                reused = true;
+                return;
+            }
+            if (stored.ExpiresAt <= DateTime.UtcNow) return;
 
-        var handler = new JwtSecurityTokenHandler();
-        return handler.WriteToken(handler.CreateToken(tokenDescriptor));
+            var user = await users.GetAsync(stored.UserId, ct);
+            if (user is null) return;
+            var replacementPlain = CreateRefreshSecret();
+            var replacementHash = HashRefreshToken(replacementPlain);
+            var now = DateTime.UtcNow;
+            stored.RevokedAt = now;
+            stored.ReplacedByTokenHash = replacementHash;
+            await refreshTokens.AddAsync(new RefreshToken { UserId = user.UserId, FamilyId = stored.FamilyId, TokenHash = replacementHash, CreatedAt = now, ExpiresAt = now.Add(RefreshLifetime) }, ct);
+            response = CreateResponse(user, replacementPlain, now);
+        }, cancellationToken);
+
+        if (reused) throw new UnauthorizedAccessException("Invalid refresh token.");
+        return response ?? throw new UnauthorizedAccessException("Invalid refresh token.");
     }
 
+    public async Task LogoutAsync(string refreshToken, CancellationToken cancellationToken = default)
+    {
+        var hash = HashRefreshToken(refreshToken);
+        await unitOfWork.ExecuteInTransactionAsync(async ct =>
+        {
+            var stored = await refreshTokens.FindByHashAsync(hash, ct);
+            if (stored is not null) await refreshTokens.RevokeFamilyAsync(stored.FamilyId, DateTime.UtcNow, ct);
+        }, cancellationToken);
+    }
+
+    private async Task<AuthTokenResponse> IssueTokensAsync(User user, Guid familyId, CancellationToken ct)
+    {
+        var now = DateTime.UtcNow;
+        var plain = CreateRefreshSecret();
+        await refreshTokens.AddAsync(new RefreshToken { UserId = user.UserId, FamilyId = familyId, TokenHash = HashRefreshToken(plain), CreatedAt = now, ExpiresAt = now.Add(RefreshLifetime) }, ct);
+        await unitOfWork.SaveChangesAsync(ct);
+        return CreateResponse(user, plain, now);
+    }
+
+    private AuthTokenResponse CreateResponse(User user, string refreshToken, DateTime now) =>
+        new(GenerateToken(UserDTOOut.FromEntity(user), now.Add(AccessLifetime)), refreshToken, now.Add(AccessLifetime), now.Add(RefreshLifetime));
+
+    private string GenerateToken(UserDTOOut user, DateTime expiresAt)
+    {
+        var secret = configuration["JWT:SecretKey"] ?? throw new InvalidOperationException("JWT:SecretKey is not configured.");
+        var descriptor = new SecurityTokenDescriptor { Issuer = configuration["JWT:ValidIssuer"], Audience = configuration["JWT:ValidAudience"], Subject = new ClaimsIdentity(new[] { new Claim(ClaimTypes.NameIdentifier, user.UserId.ToString()), new Claim(ClaimTypes.Name, user.UserName), new Claim(ClaimTypes.Role, user.Role), new Claim(ClaimTypes.Email, user.Email) }), Expires = expiresAt, SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret)), SecurityAlgorithms.HmacSha256Signature) };
+        var handler = new JwtSecurityTokenHandler(); return handler.WriteToken(handler.CreateToken(descriptor));
+    }
+
+    private static string CreateRefreshSecret() => Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
+    private static string HashRefreshToken(string token) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token))).ToLowerInvariant();
     public string HashPassword(string password) => PasswordHasher.Hash(password);
-
-    public int? GetUserId(ClaimsPrincipal user)
-    {
-        var claim = user.FindFirst(ClaimTypes.NameIdentifier);
-        return claim is not null && int.TryParse(claim.Value, out int id) ? id : null;
-    }
-
-    public bool HasAccessToResource(int ownerUserId, ClaimsPrincipal user)
-    {
-        var isOwner = GetUserId(user) == ownerUserId;
-        var isAdmin = user.IsInRole(Roles.Admin.ToString());
-        return isOwner || isAdmin;
-    }
+    public int? GetUserId(ClaimsPrincipal user) { var claim = user.FindFirst(ClaimTypes.NameIdentifier); return claim is not null && int.TryParse(claim.Value, out var id) ? id : null; }
+    public bool HasAccessToResource(int ownerUserId, ClaimsPrincipal user) => GetUserId(user) == ownerUserId || user.IsInRole(Roles.Admin.ToString());
 }

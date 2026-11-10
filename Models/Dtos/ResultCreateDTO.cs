@@ -13,9 +13,6 @@ public class ResultCreateDTO
     [Range(0, 9999)]
     public decimal FastestLapSeconds { get; set; }
 
-    [Range(0, 1000)]
-    public int Points { get; set; }
-
     [Range(0, 100)]
     public int IncidentPoints { get; set; }
 

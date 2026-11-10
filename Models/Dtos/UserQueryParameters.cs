@@ -1,8 +1,9 @@
 namespace IRacingLeague.Models.Dtos;
 
-public class UserQueryParameters
+public class UserQueryParameters : PaginationParameters
 {
     public int? MinIRating { get; set; }
+    public string? MinLicenseClass { get; set; }
 
     public string? LicenseClass { get; set; }
 

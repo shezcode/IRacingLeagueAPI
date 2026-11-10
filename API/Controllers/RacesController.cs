@@ -3,169 +3,98 @@ using IRacingLeague.Business;
 using IRacingLeague.Models.Dtos;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace IRacingLeague.API.Controllers;
 
+/// <summary>Schedules and reads league races.</summary>
 [ApiController]
-public class RacesController : ControllerBase
+[Route("api/v1")]
+[Tags("Races")]
+public sealed class RacesController(IRaceService service, ILeagueService leagues, IAuthService auth, LeagueViewPolicy viewPolicy) : ControllerBase
 {
-    private readonly IRaceService _service;
-    private readonly ILeagueService _leagues;
-    private readonly IAuthService _auth;
-    private readonly LeagueViewPolicy _viewPolicy;
-    private readonly ILogger<RacesController> _logger;
-
-    public RacesController(
-        IRaceService service, ILeagueService leagues, IAuthService auth,
-        LeagueViewPolicy viewPolicy, ILogger<RacesController> logger)
+    /// <summary>Lists a league's races using filters and pagination.</summary>
+    [HttpGet("leagues/{leagueId:int}/races")]
+    [ProducesResponseType(typeof(PagedResponse<RaceReadDTO>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
+    public async Task<ActionResult<PagedResponse<RaceReadDTO>>> GetByLeague(int leagueId, [FromQuery] RaceQueryParameters query, CancellationToken ct)
     {
-        _service = service;
-        _leagues = leagues;
-        _auth = auth;
-        _viewPolicy = viewPolicy;
-        _logger = logger;
+        var league = await leagues.GetByIdAsync(leagueId, ct);
+        if (!await viewPolicy.CanViewAsync(league, User, ct)) throw new ForbiddenException("You do not have access to this resource.");
+        var page = await service.GetByLeagueAsync(leagueId, query, ct);
+        return Ok(new PagedResponse<RaceReadDTO>(page.Items.Select(RaceReadDTO.FromEntity).ToArray(), page.Page, page.PageSize, page.TotalCount));
     }
 
-    [HttpGet("leagues/{leagueId}/races")]
-    public ActionResult<IEnumerable<RaceReadDTO>> GetByLeague(int leagueId, [FromQuery] RaceQueryParameters query)
+    /// <summary>Gets a race visible to the caller.</summary>
+    [HttpGet("races/{id:int}")]
+    [ProducesResponseType(typeof(RaceReadDTO), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
+    public async Task<ActionResult<RaceReadDTO>> Get(int id, CancellationToken ct)
     {
-        try
-        {
-            var league = _leagues.GetById(leagueId);   // 404 if missing
-            if (!_viewPolicy.CanView(league, User))
-                return Forbid();
-
-            var races = _service.GetByLeague(leagueId, query).Select(RaceReadDTO.FromEntity);
-            return Ok(races);
-        }
-        catch (KeyNotFoundException)
-        {
-            return NotFound();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to list races for league {LeagueId}", leagueId);
-            return StatusCode(StatusCodes.Status500InternalServerError);
-        }
+        var race = await service.GetByIdAsync(id, ct); var league = await leagues.GetByIdAsync(race.LeagueId, ct);
+        if (!await viewPolicy.CanViewAsync(league, User, ct)) throw new ForbiddenException("You do not have access to this resource.");
+        Response.Headers.ETag = ETag(race.Version);
+        return Ok(RaceReadDTO.FromEntity(race));
     }
 
-    [HttpGet("races/{id}")]
-    public ActionResult<RaceReadDTO> Get(int id)
-    {
-        try
-        {
-            var race = _service.GetById(id);
-            var league = _leagues.GetById(race.LeagueId);
-            if (!_viewPolicy.CanView(league, User))
-                return Forbid();
-
-            return Ok(RaceReadDTO.FromEntity(race));
-        }
-        catch (KeyNotFoundException)
-        {
-            return NotFound();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to fetch race {RaceId}", id);
-            return StatusCode(StatusCodes.Status500InternalServerError);
-        }
-    }
-
-    [HttpPost("leagues/{leagueId}/races")]
+    /// <summary>Schedules a race in a league.</summary>
+    /// <remarks>Example request: <code>{"track":"Spa-Francorchamps","car":"GT3","scheduledAt":"2027-03-14T14:00:00Z","lapCount":20,"ambientTempC":18}</code></remarks>
+    [HttpPost("leagues/{leagueId:int}/races")]
     [Authorize]
-    public ActionResult<RaceReadDTO> Create(int leagueId, [FromBody] RaceCreateDTO dto)
+    [ProducesResponseType(typeof(RaceReadDTO), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(HttpValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
+    public async Task<ActionResult<RaceReadDTO>> Create(int leagueId, [FromBody] RaceCreateDTO dto, CancellationToken ct)
     {
-        if (!ModelState.IsValid)
-            return BadRequest(ModelState);
-
-        try
-        {
-            var league = _leagues.GetById(leagueId);   // 404 if missing
-            if (!_auth.HasAccessToResource(league.OwnerUserId, User))
-                return Forbid();
-
-            var race = _service.Create(
-                leagueId, dto.Track, dto.Car, dto.ScheduledAt, dto.LapCount, dto.AmbientTempC);
-
-            return CreatedAtAction(nameof(Get), new { id = race.RaceId }, RaceReadDTO.FromEntity(race));
-        }
-        catch (KeyNotFoundException)
-        {
-            return NotFound();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to schedule race in league {LeagueId}", leagueId);
-            return StatusCode(StatusCodes.Status500InternalServerError);
-        }
+        var league = await leagues.GetByIdAsync(leagueId, ct);
+        if (!auth.HasAccessToResource(league.OwnerUserId, User)) throw new ForbiddenException("You do not have access to this resource.");
+        var race = await service.CreateAsync(leagueId, dto.Track, dto.Car, dto.ScheduledAt, dto.LapCount, dto.AmbientTempC, ct);
+        return CreatedAtAction(nameof(Get), new { id = race.RaceId }, RaceReadDTO.FromEntity(race));
     }
 
-    [HttpPut("races/{id}")]
+    /// <summary>Updates a scheduled race.</summary>
+    /// <remarks>Example request: <code>{"track":"Monza","car":"GT3","scheduledAt":"2027-04-04T14:00:00Z","lapCount":18,"ambientTempC":20,"isCompleted":false}</code></remarks>
+    [HttpPut("races/{id:int}")]
     [Authorize]
-    public IActionResult Update(int id, [FromBody] RaceUpdateDTO dto)
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(HttpValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status412PreconditionFailed)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> Update(int id, [FromBody] RaceUpdateDTO dto, [FromHeader(Name = "If-Match")] string? ifMatch, CancellationToken ct)
     {
-        if (!ModelState.IsValid)
-            return BadRequest(ModelState);
-
-        try
-        {
-            var race = _service.GetById(id);   // 404 if missing
-            var league = _leagues.GetById(race.LeagueId);
-            if (!_auth.HasAccessToResource(league.OwnerUserId, User))
-                return Forbid();
-
-            race.Track = dto.Track;
-            race.Car = dto.Car;
-            race.ScheduledAt = dto.ScheduledAt;
-            race.LapCount = dto.LapCount;
-            race.AmbientTempC = dto.AmbientTempC;
-            // Round is derived from schedule order, not client-supplied; left untouched here.
-            race.IsCompleted = dto.IsCompleted;
-
-            _service.Update(race);
-            return NoContent();
-        }
-        catch (KeyNotFoundException)
-        {
-            return NotFound();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to update race {RaceId}", id);
-            return StatusCode(StatusCodes.Status500InternalServerError);
-        }
+        var race = await service.GetByIdAsync(id, ct); var league = await leagues.GetByIdAsync(race.LeagueId, ct);
+        if (!auth.HasAccessToResource(league.OwnerUserId, User)) throw new ForbiddenException("You do not have access to this resource.");
+        if (!Matches(ifMatch, race.Version)) throw new PreconditionFailedException("The If-Match value does not match the current resource version.");
+        if (race.IsCompleted && dto.ScheduledAt != race.ScheduledAt) throw new ConflictException("A completed race cannot be rescheduled.");
+        race.Track = dto.Track; race.Car = dto.Car; race.ScheduledAt = dto.ScheduledAt; race.LapCount = dto.LapCount; race.AmbientTempC = dto.AmbientTempC;
+        await service.UpdateAsync(race, ct); return NoContent();
     }
 
-    [HttpDelete("races/{id}")]
-    [Authorize]
-    public IActionResult Delete(int id)
-    {
-        try
-        {
-            var race = _service.GetById(id);   // 404 if missing
-            var league = _leagues.GetById(race.LeagueId);
-            if (!_auth.HasAccessToResource(league.OwnerUserId, User))
-                return Forbid();
+    private static string ETag(uint version) => $"\"{version}\"";
+    private static bool Matches(string? ifMatch, uint version) => ifMatch is null || ifMatch.Trim() == ETag(version);
 
-            _service.Delete(id);
-            return NoContent();
-        }
-        catch (KeyNotFoundException)
-        {
-            return NotFound();
-        }
-        catch (DbUpdateException)
-        {
-            // Defensive fallback: the service cascades a race's results before removing it, so
-            // the Restrict FK shouldn't trip — but surface a 409 rather than a 500 if it does.
-            return Conflict("Cannot delete a race that has recorded results.");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to delete race {RaceId}", id);
-            return StatusCode(StatusCodes.Status500InternalServerError);
-        }
+    /// <summary>Deletes a race and its results.</summary>
+    [HttpDelete("races/{id:int}")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> Delete(int id, CancellationToken ct)
+    {
+        var race = await service.GetByIdAsync(id, ct); var league = await leagues.GetByIdAsync(race.LeagueId, ct);
+        if (!auth.HasAccessToResource(league.OwnerUserId, User)) throw new ForbiddenException("You do not have access to this resource.");
+        await service.DeleteAsync(id, ct); return NoContent();
     }
 }

@@ -1,130 +1,82 @@
 using IRacingLeague.Data;
 using IRacingLeague.Models;
+using IRacingLeague.Models.Dtos;
 
 namespace IRacingLeague.Business;
 
-public class ResultService : IResultService
+public sealed class ResultService(IResultRepository results, IRegistrationRepository registrations, IRaceRepository races, ILeagueRepository leagues, IUnitOfWork unitOfWork, IRatingReplayService ratingReplay) : IResultService
 {
-    private readonly IResultRepository _results;
-    private readonly IRegistrationRepository _registrations;
-    private readonly IUserRepository _users;
-
-    public ResultService(IResultRepository results, IRegistrationRepository registrations, IUserRepository users)
+    public async Task ReplaceClassificationAsync(int raceId, IReadOnlyList<ClassificationEntryDTO> entries, CancellationToken cancellationToken = default)
     {
-        _results = results;
-        _registrations = registrations;
-        _users = users;
-    }
-
-    public Result ApplyResult(Registration registration, Race race, Result result)
-    {
-        var user = _users.Get(registration.UserId)
-            ?? throw new KeyNotFoundException($"User with id {registration.UserId} not found.");
-
-        // At most one result per driver per race: re-entering updates in place
-        // instead of inserting a duplicate that would double-count points and stats.
-        var existingId = _results.GetAll()
-            .FirstOrDefault(r => r.RegistrationId == registration.RegistrationId && r.RaceId == race.RaceId)
-            ?.ResultId;
-
-        if (existingId is not null)
+        var (race, scored) = await BuildClassificationAsync(raceId, entries, cancellationToken);
+        var previousRegistrationIds = (await results.GetByRaceAsync(raceId, cancellationToken)).Select(x => x.RegistrationId);
+        await unitOfWork.ExecuteInTransactionAsync(async ct =>
         {
-            // Re-fetch tracked (Find) so a result the caller already loaded resolves to the
-            // same instance rather than a second copy that would collide on its key.
-            var existing = _results.Get(existingId.Value)!;
+            await results.ReplaceRaceAsync(raceId, scored, ct);
+            race.IsCompleted = scored.Count > 0;
+            await races.UpdateAsync(race, ct);
+            await unitOfWork.SaveChangesAsync(ct);
+            await ratingReplay.ReplayFromAsync(race.ScheduledAt, raceId,
+                previousRegistrationIds.Concat(entries.Select(x => x.RegistrationId)).Distinct().ToArray(), ct);
+        }, cancellationToken);
+    }
 
-            // Back out the previous contribution before applying the new values.
-            registration.AddPoints(result.Points - existing.Points);
-            user.UndoRaceOutcome(existing.Position, existing.IncidentPoints);
-            user.ApplyRaceOutcome(result.Position, result.IncidentPoints);
+    public async Task<IReadOnlyList<Result>> PreviewClassificationAsync(int raceId, IReadOnlyList<ClassificationEntryDTO> entries, CancellationToken cancellationToken = default) =>
+        (await BuildClassificationAsync(raceId, entries, cancellationToken)).Scored;
 
-            // Overwrite the existing row in place.
-            existing.Position = result.Position;
-            existing.FastestLapSeconds = result.FastestLapSeconds;
-            existing.Points = result.Points;
-            existing.IncidentPoints = result.IncidentPoints;
-            existing.Dnf = result.Dnf;
-            existing.Notes = result.Notes;
-            existing.FinishedAt = result.FinishedAt;
-            _results.Update(existing);
-            result = existing;
-        }
-        else
+    private async Task<(Race Race, List<Result> Scored)> BuildClassificationAsync(int raceId, IReadOnlyList<ClassificationEntryDTO> entries, CancellationToken cancellationToken)
+    {
+        var race = await races.GetAsync(raceId, cancellationToken) ?? throw new NotFoundException($"Race with id {raceId} not found.");
+        var league = await leagues.GetAsync(race.LeagueId, cancellationToken) ?? throw new NotFoundException($"League with id {race.LeagueId} not found.");
+        var errors = Validate(entries, race, league);
+        var members = await registrations.GetByLeagueAsync(race.LeagueId, cancellationToken);
+        var memberIds = members.Select(x => x.RegistrationId).ToHashSet();
+        if (entries.Count > members.Count) errors.Add($"Classification cannot contain more than the league's {members.Count} registered members.");
+        if (entries.Any(x => !memberIds.Contains(x.RegistrationId))) errors.Add("Every registration must belong to this race's league.");
+        if (errors.Count > 0) throw new DomainValidationException(string.Join("; ", errors));
+        var fastestLapEntry = entries.Where(x => !x.Dnf && x.FastestLapSeconds > 0)
+            .OrderBy(x => x.FastestLapSeconds).ThenBy(x => x.Position).FirstOrDefault();
+        var scored = entries.Select(e =>
         {
-            // First result for this driver/race: persist it and apply the contribution.
-            result.RegistrationId = registration.RegistrationId;
-            result.RaceId = race.RaceId;
-            _results.Add(result);
-
-            registration.AddPoints(result.Points);
-            user.ApplyRaceOutcome(result.Position, result.IncidentPoints);
-        }
-        _results.SaveChanges();
-
-        _registrations.Update(registration);
-        _registrations.SaveChanges();
-
-        _users.Update(user);
-        _users.SaveChanges();
-
-        return result;
+            var fastestLap = fastestLapEntry is not null && fastestLapEntry.RegistrationId == e.RegistrationId;
+            var points = e.Dnf ? 0 : Score(league.PointsTable, e.Position) + (fastestLap ? league.FastestLapBonus : 0);
+            return new Result(e.RegistrationId, raceId, e.Position, e.FastestLapSeconds, points,
+                e.IncidentPoints, e.Dnf, e.Notes) { FastestLap = fastestLap };
+        }).ToList();
+        return (race, scored);
     }
 
-    public IEnumerable<Result> GetByRace(int raceId) =>
-        _results.GetAll().Where(r => r.RaceId == raceId).OrderBy(r => r.Position).ToList();
-
-    public Result GetById(int id)
+    public async Task ClearClassificationAsync(int raceId, CancellationToken cancellationToken = default)
     {
-        var result = _results.Get(id);
-        if (result == null)
-            throw new KeyNotFoundException($"Result with id {id} not found.");
-        return result;
-    }
-
-    public void Delete(int id)
-    {
-        var result = _results.Get(id)
-            ?? throw new KeyNotFoundException($"Result with id {id} not found.");
-        BackOut(result);
-        _results.SaveChanges();
-    }
-
-    public void DeleteForRace(int raceId)
-    {
-        var results = _results.GetAll().Where(r => r.RaceId == raceId).ToList();
-        foreach (var result in results)
-            BackOut(result);
-        _results.SaveChanges();   // shared DbContext: one flush persists every back-out and removal
-    }
-
-    public void DeleteForRegistration(int registrationId)
-    {
-        var results = _results.GetAll().Where(r => r.RegistrationId == registrationId).ToList();
-        foreach (var result in results)
-            BackOut(result);
-        _results.SaveChanges();
-    }
-
-    // Exact inverse of ApplyResult's first-application path: undo the points/iRating/SR/wins
-    // contribution this result made, then remove the row. The tracked registration and user
-    // (fetched via Get/Find) accumulate correctly when several results share them, so a whole
-    // race or registration can be backed out in one pass.
-    private void BackOut(Result result)
-    {
-        var registration = _registrations.Get(result.RegistrationId);
-        if (registration is not null)
+        var race = await races.GetAsync(raceId, cancellationToken) ?? throw new NotFoundException($"Race with id {raceId} not found.");
+        var changedRegistrationIds = (await results.GetByRaceAsync(raceId, cancellationToken)).Select(x => x.RegistrationId).ToArray();
+        await unitOfWork.ExecuteInTransactionAsync(async ct =>
         {
-            registration.AddPoints(-result.Points);
-            _registrations.Update(registration);
-
-            var user = _users.Get(registration.UserId);
-            if (user is not null)
-            {
-                user.UndoRaceOutcome(result.Position, result.IncidentPoints);
-                _users.Update(user);
-            }
-        }
-
-        _results.Delete(result.ResultId);
+            await results.ClearRaceAsync(raceId, ct);
+            race.IsCompleted = false;
+            await races.UpdateAsync(race, ct);
+            await unitOfWork.SaveChangesAsync(ct);
+            await ratingReplay.ReplayFromAsync(race.ScheduledAt, raceId, changedRegistrationIds, ct);
+        }, cancellationToken);
     }
+
+    private static List<string> Validate(IReadOnlyList<ClassificationEntryDTO> entries, Race race, League league)
+    {
+        var errors = new List<string>();
+        if (race.ScheduledAt > DateTime.UtcNow) errors.Add("A future race cannot be classified.");
+        if (entries.Count == 0) errors.Add("Classification must contain at least one driver.");
+        if (entries.Count > league.MaxDrivers) errors.Add($"Classification cannot exceed {league.MaxDrivers} drivers.");
+        if (!entries.Select(x => x.Position).Order().SequenceEqual(Enumerable.Range(1, entries.Count))) errors.Add("Positions must be exactly 1 through N with no gaps or duplicates.");
+        if (entries.Select(x => x.RegistrationId).Distinct().Count() != entries.Count) errors.Add("Registration ids must be unique.");
+        var finishers = entries.Where(x => !x.Dnf).ToList();
+        if (entries.Any(x => x.Dnf && finishers.Any(f => f.Position > x.Position))) errors.Add("DNF positions must be after all finishers.");
+        if (entries.Any(x => x.RegistrationId <= 0 || x.Position <= 0 || x.Position > 999 || x.IncidentPoints < 0 || x.IncidentPoints > 100 || x.FastestLapSeconds < 0 || x.FastestLapSeconds > 9999)) errors.Add("One or more classification values are out of range.");
+        errors.AddRange(LeagueScoring.Validate(league.PointsTable, league.FastestLapBonus));
+        return errors;
+    }
+    private static int Score(int[] table, int position) => position <= table.Length ? table[position - 1] : 0;
+    public Task<IReadOnlyList<Result>> GetByRaceAsync(int raceId, CancellationToken cancellationToken = default) => results.GetByRaceAsync(raceId, cancellationToken);
+    public Task<PagedResponse<Result>> GetByRacePageAsync(int raceId, PaginationParameters parameters, CancellationToken cancellationToken = default) => results.GetByRacePageAsync(raceId, parameters, cancellationToken);
+    public async Task<Result> GetByIdAsync(int id, CancellationToken cancellationToken = default) => await results.GetAsync(id, cancellationToken) ?? throw new NotFoundException($"Result with id {id} not found.");
+    public Task DeleteAsync(int id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 }

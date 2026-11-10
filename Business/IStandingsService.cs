@@ -1,8 +1,8 @@
+using IRacingLeague.Models.Dtos;
 using IRacingLeague.Models;
-
 namespace IRacingLeague.Business;
 
 public interface IStandingsService
 {
-    IEnumerable<StandingEntry> GetStandings(int leagueId);
+    Task<PagedResponse<StandingEntry>> GetStandingsAsync(int leagueId, PaginationParameters parameters, CancellationToken cancellationToken = default);
 }

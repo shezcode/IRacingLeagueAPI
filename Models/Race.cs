@@ -11,6 +11,7 @@ public class Race
     public bool IsCompleted { get; set; }
     public decimal AmbientTempC { get; set; }
     public int Round { get; set; }
+    public uint Version { get; set; }
 
     // Parameterless ctor kept for JSON (de)serialization in a later step.
     public Race() { }
@@ -28,7 +29,4 @@ public class Race
         IsCompleted = false;
     }
 
-    public override string ToString() =>
-        $"[{RaceId}] R{Round} {Track} ({Car}) — {ScheduledAt:yyyy-MM-dd HH:mm}, " +
-        $"{LapCount} laps, {AmbientTempC:0.#}C{(IsCompleted ? " (completed)" : "")}";
 }

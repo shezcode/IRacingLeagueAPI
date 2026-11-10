@@ -7,162 +7,100 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace IRacingLeague.API.Controllers;
 
-[ApiController]
-public class ResultsController : ControllerBase
+[ApiController, Route("api/v1"), Tags("Race results")]
+public sealed class ResultsController(IResultService results, IRaceService races, ILeagueService leagues, IRegistrationService registrations, CsvClassificationParser csvParser, IAuthService auth, LeagueViewPolicy viewPolicy) : ControllerBase
 {
-    private readonly IResultService _results;
-    private readonly IRegistrationService _registrations;
-    private readonly IRaceService _races;
-    private readonly ILeagueService _leagues;
-    private readonly IAuthService _auth;
-    private readonly LeagueViewPolicy _viewPolicy;
-    private readonly ILogger<ResultsController> _logger;
-
-    public ResultsController(
-        IResultService results, IRegistrationService registrations, IRaceService races,
-        ILeagueService leagues, IAuthService auth, LeagueViewPolicy viewPolicy,
-        ILogger<ResultsController> logger)
+    /// <summary>Lists a race's classification in position order.</summary>
+    [HttpGet("races/{raceId:int}/results")]
+    [ProducesResponseType(typeof(PagedResponse<ResultReadDTO>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(HttpValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
+    public async Task<ActionResult<PagedResponse<ResultReadDTO>>> GetByRace(int raceId, [FromQuery] PaginationParameters query, CancellationToken ct)
     {
-        _results = results;
-        _registrations = registrations;
-        _races = races;
-        _leagues = leagues;
-        _auth = auth;
-        _viewPolicy = viewPolicy;
-        _logger = logger;
+        var race = await races.GetByIdAsync(raceId, ct); var league = await leagues.GetByIdAsync(race.LeagueId, ct);
+        if (!await viewPolicy.CanViewAsync(league, User, ct)) throw new ForbiddenException("You do not have access to this resource.");
+        var page = await results.GetByRacePageAsync(raceId, query, ct);
+        return Ok(new PagedResponse<ResultReadDTO>(page.Items.Select(ResultReadDTO.FromEntity).ToArray(), page.Page, page.PageSize, page.TotalCount));
     }
 
-    [HttpGet("races/{raceId}/results")]
-    public ActionResult<IEnumerable<ResultReadDTO>> GetByRace(int raceId)
+    /// <summary>Replaces a race's full classification and recalculates standings and ratings.</summary>
+    /// <remarks>Example request: <code>[{"registrationId":12,"position":1,"fastestLapSeconds":92.5,"incidentPoints":0,"dnf":false,"notes":"Clean race"},{"registrationId":18,"position":2,"fastestLapSeconds":93.1,"incidentPoints":1,"dnf":false,"notes":""}]</code></remarks>
+    [HttpPut("races/{raceId:int}/results"), Authorize]
+    [ProducesResponseType(typeof(PagedResponse<ResultReadDTO>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(HttpValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
+    public async Task<ActionResult<PagedResponse<ResultReadDTO>>> Replace(int raceId, [FromBody] List<ClassificationEntryDTO> entries, CancellationToken ct)
     {
-        try
-        {
-            var race = _races.GetById(raceId);   // 404 if missing
-            var league = _leagues.GetById(race.LeagueId);
-            if (!_viewPolicy.CanView(league, User))
-                return Forbid();
-
-            var results = _results.GetByRace(raceId).Select(ResultReadDTO.FromEntity);
-            return Ok(results);
-        }
-        catch (KeyNotFoundException)
-        {
-            return NotFound();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to list results for race {RaceId}", raceId);
-            return StatusCode(StatusCodes.Status500InternalServerError);
-        }
+        var race = await races.GetByIdAsync(raceId, ct); var league = await leagues.GetByIdAsync(race.LeagueId, ct);
+        if (!auth.HasAccessToResource(league.OwnerUserId, User)) throw new ForbiddenException("You do not have access to this resource.");
+        await results.ReplaceClassificationAsync(raceId, entries, ct);
+        var page = await results.GetByRacePageAsync(raceId, new PaginationParameters { Page = 1, PageSize = 100 }, ct);
+        return Ok(new PagedResponse<ResultReadDTO>(page.Items.Select(ResultReadDTO.FromEntity).ToArray(), page.Page, page.PageSize, page.TotalCount));
     }
 
-    [HttpPost("races/{raceId}/results")]
-    [Authorize]
-    public ActionResult<ResultReadDTO> Create(int raceId, [FromBody] ResultCreateDTO dto)
+    /// <summary>Imports a CSV classification, optionally previewing the scored results without saving.</summary>
+    /// <remarks>The CSV header must contain position, car number, fastest lap, incidents, DNF, notes.</remarks>
+    [HttpPost("races/{raceId:int}/results/import"), Authorize, Consumes("multipart/form-data")]
+    [RequestSizeLimit(1_048_576)]
+    [ProducesResponseType(typeof(IReadOnlyList<ResultReadDTO>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(PagedResponse<ResultReadDTO>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> Import(int raceId, [FromForm] IFormFile file, [FromQuery] bool preview, CancellationToken ct)
     {
-        if (!ModelState.IsValid)
-            return BadRequest(ModelState);
-
+        if (file is null) throw new DomainValidationException("A CSV file is required.");
+        if (file.Length is <= 0 or > 1_048_576) throw new DomainValidationException("CSV file size must be between 1 byte and 1 MB.");
+        var race = await races.GetByIdAsync(raceId, ct);
+        var league = await leagues.GetByIdAsync(race.LeagueId, ct);
+        if (!auth.HasAccessToResource(league.OwnerUserId, User)) throw new ForbiddenException("You do not have access to this resource.");
+        var members = await registrations.GetByLeagueAsync(league.LeagueId, ct);
+        var map = members.ToDictionary(x => x.CarNumber, x => x.RegistrationId);
+        using var stream = file.OpenReadStream();
+        using var reader = new StreamReader(stream);
+        var (entries, errors) = csvParser.Parse(reader, map);
+        IReadOnlyList<Result> calculated = [];
         try
         {
-            var race = _races.GetById(raceId);              // 404 if the race is missing
-            var league = _leagues.GetById(race.LeagueId);
-            if (!_auth.HasAccessToResource(league.OwnerUserId, User))
-                return Forbid();
-
-            var registration = _registrations.GetById(dto.RegistrationId);  // 404 if missing
-
-            // The registration must belong to the same league as the race; otherwise a
-            // driver from another league could be scored here. Abort without persisting.
-            if (registration.LeagueId != race.LeagueId)
-                return BadRequest("Registration does not belong to this race's league.");
-
-            var result = new Result(
-                registration.RegistrationId, race.RaceId, dto.Position,
-                dto.FastestLapSeconds, dto.Points, dto.IncidentPoints, dto.Dnf, dto.Notes);
-
-            var applied = _results.ApplyResult(registration, race, result);
-            return CreatedAtAction(nameof(GetByRace), new { raceId }, ResultReadDTO.FromEntity(applied));
+            calculated = await results.PreviewClassificationAsync(raceId, entries, ct);
         }
-        catch (KeyNotFoundException)
+        catch (DomainValidationException exception)
         {
-            return NotFound();
+            errors = errors.Append(exception.Message).ToArray();
         }
-        catch (Exception ex)
+        if (errors.Count > 0) throw new DomainValidationException(string.Join("; ", errors));
+
+        if (preview)
         {
-            _logger.LogError(ex, "Failed to enter result for race {RaceId}", raceId);
-            return StatusCode(StatusCodes.Status500InternalServerError);
+            return Ok(calculated.Select(ResultReadDTO.FromEntity).ToArray());
         }
+
+        await results.ReplaceClassificationAsync(raceId, entries, ct);
+        var page = await results.GetByRacePageAsync(raceId, new PaginationParameters { Page = 1, PageSize = 100 }, ct);
+        return StatusCode(StatusCodes.Status201Created,
+            new PagedResponse<ResultReadDTO>(page.Items.Select(ResultReadDTO.FromEntity).ToArray(), page.Page, page.PageSize, page.TotalCount));
     }
 
-    [HttpPut("results/{id}")]
-    [Authorize]
-    public IActionResult Update(int id, [FromBody] ResultCreateDTO dto)
+    /// <summary>Clears a race classification and replays affected driver ratings.</summary>
+    [HttpDelete("races/{raceId:int}/results"), Authorize]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> Clear(int raceId, CancellationToken ct)
     {
-        if (!ModelState.IsValid)
-            return BadRequest(ModelState);
-
-        try
-        {
-            var result = _results.GetById(id);          // 404 if missing
-            var race = _races.GetById(result.RaceId);
-            var league = _leagues.GetById(race.LeagueId);
-            if (!_auth.HasAccessToResource(league.OwnerUserId, User))
-                return Forbid();
-
-            // A result edit stays with its original driver. Reassigning to another
-            // registration would touch two drivers' stats — that's a delete + re-create,
-            // not an edit — so it's rejected here.
-            if (dto.RegistrationId != result.RegistrationId)
-                return BadRequest("Cannot reassign a result to a different registration.");
-
-            var registration = _registrations.GetById(result.RegistrationId);
-
-            // Route through ApplyResult so the previous points/iRating/SR/wins contribution
-            // is backed out and the new values applied — keeping standings and stats in sync.
-            var updated = new Result(
-                registration.RegistrationId, race.RaceId, dto.Position,
-                dto.FastestLapSeconds, dto.Points, dto.IncidentPoints, dto.Dnf, dto.Notes);
-
-            _results.ApplyResult(registration, race, updated);
-            return NoContent();
-        }
-        catch (KeyNotFoundException)
-        {
-            return NotFound();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to update result {ResultId}", id);
-            return StatusCode(StatusCodes.Status500InternalServerError);
-        }
-    }
-
-    [HttpDelete("results/{id}")]
-    [Authorize]
-    public IActionResult Delete(int id)
-    {
-        try
-        {
-            var result = _results.GetById(id);          // 404 if missing
-            var race = _races.GetById(result.RaceId);
-            var league = _leagues.GetById(race.LeagueId);
-            if (!_auth.HasAccessToResource(league.OwnerUserId, User))
-                return Forbid();
-
-            // Backs out the result's points/iRating/SR/wins contribution before removing it,
-            // keeping standings and global driver stats in sync.
-            _results.Delete(id);
-            return NoContent();
-        }
-        catch (KeyNotFoundException)
-        {
-            return NotFound();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to delete result {ResultId}", id);
-            return StatusCode(StatusCodes.Status500InternalServerError);
-        }
+        var race = await races.GetByIdAsync(raceId, ct); var league = await leagues.GetByIdAsync(race.LeagueId, ct);
+        if (!auth.HasAccessToResource(league.OwnerUserId, User)) throw new ForbiddenException("You do not have access to this resource.");
+        await results.ClearClassificationAsync(raceId, ct); return NoContent();
     }
 }

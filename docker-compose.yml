@@ -1,21 +1,19 @@
-# DWES2 orchestration: the API and its SQL Server database on a shared network.
-# Ports follow the brief — 8009 (API, San Valero user 28009) and 9008 (DB, inverted).
-# Inside the network the API reaches the DB by the service name "db" on 1433; the
-# 9008 mapping is only for host access. .NET 8 listens on 8080 inside the api container.
-
+# Copy .env.example to .env and set a private JWT signing key before starting.
 services:
   db:
-    image: mcr.microsoft.com/mssql/server:2022-latest
+    image: postgres:17
+    env_file:
+      - .env
     environment:
-      ACCEPT_EULA: "Y"
-      MSSQL_SA_PASSWORD: "IRacing!Pass2026"
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in .env}
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
     ports:
-      - "9008:1433"
+      - "9008:5432"
     volumes:
-      - mssql-data:/var/opt/mssql
+      - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      # api waits on this so it doesn't race the database during warm-up.
-      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q \"SELECT 1\" || exit 1"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -27,10 +25,9 @@ services:
     build:
       context: .
       dockerfile: API/Dockerfile
+    env_file:
+      - .env
     environment:
-      # Points at the db service by name; overrides appsettings via the standard
-      # ConnectionStrings__ServerDB binding. Migrations are applied on boot (Program.cs).
-      ConnectionStrings__ServerDB: "Server=db,1433;Database=IRacingLeague;User Id=sa;Password=IRacing!Pass2026;TrustServerCertificate=True;Encrypt=False"
       ASPNETCORE_ENVIRONMENT: "Production"
     ports:
       - "8009:8080"
@@ -41,7 +38,7 @@ services:
       - iracing
 
 volumes:
-  mssql-data:
+  postgres-data:
 
 networks:
   iracing:

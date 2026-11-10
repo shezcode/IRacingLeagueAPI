@@ -10,6 +10,9 @@ public class League
     public decimal EntryFee { get; set; }
     public DateTime CreatedAt { get; set; }
     public int OwnerUserId { get; set; }
+    public uint Version { get; set; }
+    public int[] PointsTable { get; set; } = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
+    public int FastestLapBonus { get; set; } = 1;
 
     // Parameterless ctor kept for JSON (de)serialization in a later step.
     public League() { }
@@ -22,10 +25,7 @@ public class League
         MaxDrivers = maxDrivers;
         EntryFee = entryFee;
         OwnerUserId = ownerUserId;
-        CreatedAt = DateTime.Now;
+        CreatedAt = DateTime.UtcNow;
     }
 
-    public override string ToString() =>
-        $"[{LeagueId}] {Name} ({Discipline}) — {(IsPublic ? "public" : "private")}, " +
-        $"max {MaxDrivers}, fee {EntryFee:0.##}, owner #{OwnerUserId}";
 }

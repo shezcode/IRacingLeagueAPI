@@ -17,4 +17,9 @@ public class LeagueUpdateDTO
 
     [Range(0, 100000)]
     public decimal EntryFee { get; set; }
+
+    public int[]? PointsTable { get; set; }
+
+    [Range(0, 50)]
+    public int? FastestLapBonus { get; set; }
 }

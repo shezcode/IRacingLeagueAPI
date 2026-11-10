@@ -1,36 +1,12 @@
 using IRacingLeague.Data;
 using IRacingLeague.Models;
-
+using IRacingLeague.Models.Dtos;
 namespace IRacingLeague.Business;
-
-public class StandingsService : IStandingsService
+public sealed class StandingsService(IRegistrationRepository registrations) : IStandingsService
 {
-    private readonly IRegistrationRepository _registrations;
-    private readonly IResultRepository _results;
-
-    public StandingsService(IRegistrationRepository registrations, IResultRepository results)
+    public async Task<PagedResponse<StandingEntry>> GetStandingsAsync(int leagueId, PaginationParameters parameters, CancellationToken cancellationToken = default)
     {
-        _registrations = registrations;
-        _results = results;
-    }
-
-    public IEnumerable<StandingEntry> GetStandings(int leagueId)
-    {
-        // Incident points and race counts both live on Result, so accumulate them
-        // per registration in a single pass to avoid an inner scan per driver.
-        var statsByRegistration = _results.GetAll()
-            .GroupBy(r => r.RegistrationId)
-            .ToDictionary(
-                g => g.Key,
-                g => (Incidents: g.Sum(r => r.IncidentPoints), RacesCompleted: g.Count()));
-
-        return _registrations.GetAll()
-            .Where(r => r.LeagueId == leagueId)
-            .OrderByDescending(r => r.Points)
-            .ThenBy(r => statsByRegistration.TryGetValue(r.RegistrationId, out var s) ? s.Incidents : 0)
-            .Select(r => new StandingEntry(
-                r,
-                statsByRegistration.TryGetValue(r.RegistrationId, out var s) ? s.RacesCompleted : 0))
-            .ToList();
+        var page = await registrations.GetStandingsAsync(leagueId, parameters, cancellationToken);
+        return new PagedResponse<StandingEntry>(page.Items.Select((x, i) => new StandingEntry(x.Registration, x.RacesCompleted, x.Points, x.Wins, x.Podiums, x.IncidentPoints, x.BestFinish, (parameters.Page - 1) * parameters.PageSize + i + 1)).ToArray(), page.Page, page.PageSize, page.TotalCount);
     }
 }

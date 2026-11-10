@@ -1,30 +1,47 @@
+using IRacingLeague.Data;
 using IRacingLeague.Models;
+using IRacingLeague.Models.Dtos;
 using Microsoft.EntityFrameworkCore;
 
 namespace IRacingLeague.Data.EF;
 
-public class EfLeagueRepository : ILeagueRepository
+public sealed class EfLeagueRepository(AppDbContext context) : ILeagueRepository
 {
-    private readonly AppDbContext _context;
-
-    public EfLeagueRepository(AppDbContext context) => _context = context;
-
-    public void Add(League league) => _context.Leagues.Add(league);
-
-    public League? Get(int id) => _context.Leagues.Find(id);
-
-    public IEnumerable<League> GetAll() => _context.Leagues.AsNoTracking().ToList();
-
-    public IQueryable<League> Query() => _context.Leagues.AsNoTracking();
-
-    public void Update(League league) => _context.Leagues.Update(league);
-
-    public void Delete(int id)
+    public Task AddAsync(League league, CancellationToken cancellationToken = default)
+    { cancellationToken.ThrowIfCancellationRequested(); context.Leagues.Add(league); return Task.CompletedTask; }
+    public Task<League?> GetAsync(int id, CancellationToken cancellationToken = default) => context.Leagues.FindAsync([id], cancellationToken).AsTask();
+    public async Task<IReadOnlyList<League>> GetAllAsync(CancellationToken cancellationToken = default) =>
+        await context.Leagues.OrderBy(x => x.LeagueId).ToListAsync(cancellationToken);
+    public async Task LockForUpdateAsync(int id, CancellationToken cancellationToken = default) =>
+        _ = await context.Leagues.FromSqlInterpolated($"SELECT l.*, l.xmin FROM \"Leagues\" AS l WHERE l.\"LeagueId\" = {id} FOR UPDATE").ToListAsync(cancellationToken);
+    public Task<int> CountMembersAsync(int id, CancellationToken cancellationToken = default) => context.Registrations.CountAsync(r => r.LeagueId == id, cancellationToken);
+    public async Task<PagedResponse<League>> GetPublicAsync(LeagueQueryParameters p, CancellationToken cancellationToken = default)
     {
-        var league = _context.Leagues.Find(id);
-        if (league is not null)
-            _context.Leagues.Remove(league);
+        var q = context.Leagues.AsNoTracking().Where(l => l.IsPublic);
+        if (!string.IsNullOrWhiteSpace(p.Discipline)) q = q.Where(l => l.Discipline.ToLower() == p.Discipline.ToLower());
+        q = p.SortBy?.ToLowerInvariant() switch
+        {
+            "entryfee" => p.Desc ? q.OrderByDescending(l => l.EntryFee) : q.OrderBy(l => l.EntryFee),
+            "createdat" => p.Desc ? q.OrderByDescending(l => l.CreatedAt) : q.OrderBy(l => l.CreatedAt),
+            "maxdrivers" => p.Desc ? q.OrderByDescending(l => l.MaxDrivers) : q.OrderBy(l => l.MaxDrivers),
+            _ => p.Desc ? q.OrderByDescending(l => l.Name) : q.OrderBy(l => l.Name)
+        };
+        var totalCount = await q.CountAsync(cancellationToken);
+        var items = await q.Skip((p.Page - 1) * p.PageSize).Take(p.PageSize).ToListAsync(cancellationToken);
+        return new PagedResponse<League>(items, p.Page, p.PageSize, totalCount);
     }
-
-    public void SaveChanges() => _context.SaveChanges();
+    public async Task<PagedResponse<League>> GetForUserAsync(int userId, PaginationParameters p, CancellationToken cancellationToken = default)
+    {
+        var query = context.Leagues.AsNoTracking()
+            .Where(l => l.OwnerUserId == userId || context.Registrations.Any(r => r.LeagueId == l.LeagueId && r.UserId == userId))
+            .OrderBy(l => l.LeagueId);
+        var totalCount = await query.CountAsync(cancellationToken);
+        var items = await query.Skip((p.Page - 1) * p.PageSize).Take(p.PageSize).ToListAsync(cancellationToken);
+        return new PagedResponse<League>(items, p.Page, p.PageSize, totalCount);
+    }
+    public Task<int> CountOwnedByAsync(int userId, CancellationToken cancellationToken = default) => context.Leagues.CountAsync(l => l.OwnerUserId == userId, cancellationToken);
+    public Task UpdateAsync(League league, CancellationToken cancellationToken = default)
+    { cancellationToken.ThrowIfCancellationRequested(); context.Leagues.Update(league); return Task.CompletedTask; }
+    public async Task DeleteAsync(int id, CancellationToken cancellationToken = default)
+    { var league = await context.Leagues.FindAsync([id], cancellationToken); if (league is not null) context.Leagues.Remove(league); }
 }
