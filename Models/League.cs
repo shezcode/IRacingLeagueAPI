@@ -11,6 +11,8 @@ public class League
     public DateTime CreatedAt { get; set; }
     public int OwnerUserId { get; set; }
     public uint Version { get; set; }
+    public string PointsTable { get; set; } = "25,18,15,12,10,8,6,4,2,1";
+    public int FastestLapBonus { get; set; } = 1;
 
     // Parameterless ctor kept for JSON (de)serialization in a later step.
     public League() { }

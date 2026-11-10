@@ -96,7 +96,6 @@ public static class DbSeeder
             points, incidentPoints, dnf, notes);
         context.Results.Add(result);
 
-        registration.AddPoints(points);
         driver.ApplyRaceOutcome(position, incidentPoints);
     }
 }

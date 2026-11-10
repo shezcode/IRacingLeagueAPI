@@ -7,6 +7,7 @@ public class Result
     public int RaceId { get; set; }           // FK -> Race
     public int Position { get; set; }
     public decimal FastestLapSeconds { get; set; }
+    public bool FastestLap { get; set; }
     public int Points { get; set; }           // points awarded for this race
     public int IncidentPoints { get; set; }   // iRacing "x" incidents
     public bool Dnf { get; set; }

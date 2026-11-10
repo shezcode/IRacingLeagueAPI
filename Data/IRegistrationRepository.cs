@@ -10,6 +10,7 @@ public interface IRegistrationRepository
     Task<IReadOnlyList<Registration>> GetByLeagueAsync(int leagueId, CancellationToken cancellationToken = default);
     Task<PagedResponse<Registration>> GetByLeaguePageAsync(int leagueId, PaginationParameters parameters, CancellationToken cancellationToken = default);
     Task<PagedResponse<Registration>> GetStandingsPageAsync(int leagueId, PaginationParameters parameters, CancellationToken cancellationToken = default);
+    Task<PagedResponse<IRacingLeague.Models.StandingSummary>> GetStandingsAsync(int leagueId, PaginationParameters parameters, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<Registration>> GetByUserAsync(int userId, CancellationToken cancellationToken = default);
     Task<Registration?> FindMembershipAsync(int userId, int leagueId, CancellationToken cancellationToken = default);
     Task<bool> HasMembershipAsync(int userId, int leagueId, CancellationToken cancellationToken = default);

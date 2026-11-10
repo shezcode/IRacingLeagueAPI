@@ -14,22 +14,6 @@ namespace IRacingLeague.Data.EF.Migrations
                 name: "IX_Registrations_LeagueId",
                 table: "Registrations");
 
-            migrationBuilder.AddColumn<uint>(
-                name: "xmin",
-                table: "Races",
-                type: "xid",
-                rowVersion: true,
-                nullable: false,
-                defaultValue: 0u);
-
-            migrationBuilder.AddColumn<uint>(
-                name: "xmin",
-                table: "Leagues",
-                type: "xid",
-                rowVersion: true,
-                nullable: false,
-                defaultValue: 0u);
-
             migrationBuilder.CreateIndex(
                 name: "IX_Registrations_LeagueId_CarNumber",
                 table: "Registrations",
@@ -53,14 +37,6 @@ namespace IRacingLeague.Data.EF.Migrations
             migrationBuilder.DropIndex(
                 name: "IX_Registrations_LeagueId_UserId",
                 table: "Registrations");
-
-            migrationBuilder.DropColumn(
-                name: "xmin",
-                table: "Races");
-
-            migrationBuilder.DropColumn(
-                name: "xmin",
-                table: "Leagues");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Registrations_LeagueId",

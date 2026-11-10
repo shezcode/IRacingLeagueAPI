@@ -37,7 +37,7 @@ public sealed class RegistrationsController(IRegistrationService service, IStand
         var league = await leagues.GetByIdAsync(leagueId, ct);
         if (!await viewPolicy.CanViewAsync(league, User, ct)) throw new ForbiddenException("You do not have access to this resource.");
         var page = await standings.GetStandingsAsync(leagueId, query, ct);
-        return Ok(new PagedResponse<RegistrationReadDTO>(page.Items.Select(e => RegistrationReadDTO.FromEntity(e.Registration, e.RacesCompleted)).ToArray(), page.Page, page.PageSize, page.TotalCount));
+        return Ok(new PagedResponse<RegistrationReadDTO>(page.Items.Select((e, i) => RegistrationReadDTO.FromStanding(new IRacingLeague.Models.StandingSummary(e.Registration, e.RacesCompleted, e.Points, e.Wins, e.Podiums, e.IncidentPoints, e.BestFinish), (query.Page - 1) * query.PageSize + i + 1)).ToArray(), page.Page, page.PageSize, page.TotalCount));
     }
 
     /// <summary>Joins the caller or adds a driver to the league.</summary>

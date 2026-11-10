@@ -7,6 +7,18 @@ namespace IRacingLeague.Data.EF;
 
 public sealed class EfResultRepository(AppDbContext context) : IResultRepository
 {
+    public async Task ReplaceRaceAsync(int raceId, IReadOnlyList<Result> results, CancellationToken cancellationToken = default)
+    {
+        var existing = await context.Results.Where(r => r.RaceId == raceId).ToListAsync(cancellationToken);
+        context.Results.RemoveRange(existing);
+        await context.SaveChangesAsync(cancellationToken);
+        await context.Results.AddRangeAsync(results, cancellationToken);
+    }
+    public async Task ClearRaceAsync(int raceId, CancellationToken cancellationToken = default)
+    {
+        var existing = await context.Results.Where(r => r.RaceId == raceId).ToListAsync(cancellationToken);
+        context.Results.RemoveRange(existing);
+    }
     public Task AddAsync(Result result, CancellationToken cancellationToken = default)
     { cancellationToken.ThrowIfCancellationRequested(); context.Results.Add(result); return Task.CompletedTask; }
     public Task<Result?> GetAsync(int id, CancellationToken cancellationToken = default) => context.Results.FindAsync([id], cancellationToken).AsTask();
