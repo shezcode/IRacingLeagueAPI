@@ -20,7 +20,7 @@ public class RaceService : IRaceService
     public Race Create(int leagueId, string track, string car, DateTime scheduledAt, int lapCount, decimal ambientTempC)
     {
         if (_leagues.Get(leagueId) == null)
-            throw new KeyNotFoundException($"League with id {leagueId} not found.");
+            throw new NotFoundException($"League with id {leagueId} not found.");
 
         var race = new Race(leagueId, track, car, AsUtc(scheduledAt), lapCount, ambientTempC);
         _races.Add(race);
@@ -65,7 +65,7 @@ public class RaceService : IRaceService
     {
         var race = _races.Get(id);
         if (race == null)
-            throw new KeyNotFoundException($"Race with id {id} not found.");
+            throw new NotFoundException($"Race with id {id} not found.");
         return race;
     }
 
@@ -73,7 +73,7 @@ public class RaceService : IRaceService
     {
         race.ScheduledAt = AsUtc(race.ScheduledAt);
         if (_races.Get(race.RaceId) == null)
-            throw new KeyNotFoundException($"Race with id {race.RaceId} not found.");
+            throw new NotFoundException($"Race with id {race.RaceId} not found.");
         _races.Update(race);
         _races.SaveChanges();
 
@@ -95,7 +95,7 @@ public class RaceService : IRaceService
     {
         var race = _races.Get(id);
         if (race == null)
-            throw new KeyNotFoundException($"Race with id {id} not found.");
+            throw new NotFoundException($"Race with id {id} not found.");
 
         var leagueId = race.LeagueId;
 

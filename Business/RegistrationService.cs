@@ -20,7 +20,7 @@ public class RegistrationService : IRegistrationService
     {
         var league = _leagues.Get(leagueId);
         if (league == null)
-            throw new KeyNotFoundException($"League with id {leagueId} not found.");
+            throw new NotFoundException($"League with id {leagueId} not found.");
 
         var members = _registrations.GetAll().Where(r => r.LeagueId == leagueId).ToList();
 
@@ -48,14 +48,14 @@ public class RegistrationService : IRegistrationService
     {
         var registration = _registrations.Get(id);
         if (registration == null)
-            throw new KeyNotFoundException($"Registration with id {id} not found.");
+            throw new NotFoundException($"Registration with id {id} not found.");
         return registration;
     }
 
     public void Delete(int id)
     {
         if (_registrations.Get(id) == null)
-            throw new KeyNotFoundException($"Registration with id {id} not found.");
+            throw new NotFoundException($"Registration with id {id} not found.");
 
         // Clear this membership's recorded results first (reversing their stat
         // contributions); the FK is Restrict, so the row can only go once results are gone.

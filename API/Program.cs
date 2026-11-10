@@ -1,5 +1,6 @@
 using System.Text;
 using IRacingLeague.Business;
+using IRacingLeague.API.Errors;
 using IRacingLeague.Data;
 using IRacingLeague.Data.EF;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -10,7 +11,19 @@ using Microsoft.OpenApi.Models;
 var builder = WebApplication.CreateBuilder(args);
 
 // Controllers are the chosen presentation style for DWES2 (mirrors the BankApp reference).
-builder.Services.AddControllers();
+builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
+{
+    options.InvalidModelStateResponseFactory = context =>
+    {
+        var problem = new Microsoft.AspNetCore.Mvc.ValidationProblemDetails(context.ModelState)
+        {
+            Status = StatusCodes.Status400BadRequest,
+            Title = "One or more validation errors occurred."
+        };
+        problem.Extensions["traceId"] = context.HttpContext.TraceIdentifier;
+        return new Microsoft.AspNetCore.Mvc.BadRequestObjectResult(problem);
+    };
+});
 
 // JWT bearer authentication. Tokens are validated against the JWT settings in
 // appsettings (overridable via JWT__SecretKey etc. as environment variables).
@@ -89,6 +102,7 @@ builder.Services.AddSwaggerGen(options =>
 });
 
 var app = builder.Build();
+app.UseMiddleware<ApiExceptionMiddleware>();
 
 // Apply pending EF Core migrations on boot so the containerized DB is
 // schema-ready without a manual `dotnet ef database update`. Idempotent: a no-op when

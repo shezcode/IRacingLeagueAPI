@@ -59,14 +59,14 @@ public class UserService : IUserService
     {
         var user = _repository.Get(id);
         if (user == null)
-            throw new KeyNotFoundException($"User with id {id} not found.");
+            throw new NotFoundException($"User with id {id} not found.");
         return user;
     }
 
     public void Update(User user)
     {
         if (_repository.Get(user.UserId) == null)
-            throw new KeyNotFoundException($"User with id {user.UserId} not found.");
+            throw new NotFoundException($"User with id {user.UserId} not found.");
         _repository.Update(user);
         _repository.SaveChanges();
     }
@@ -74,7 +74,7 @@ public class UserService : IUserService
     public void Delete(int id)
     {
         if (_repository.Get(id) == null)
-            throw new KeyNotFoundException($"User with id {id} not found.");
+            throw new NotFoundException($"User with id {id} not found.");
 
         // Owned leagues hold other drivers' registrations and results, so we never wipe them
         // as a side effect of deleting their owner. Refuse until the admin clears them first.

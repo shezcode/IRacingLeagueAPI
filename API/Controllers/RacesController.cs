@@ -30,91 +30,54 @@ public class RacesController : ControllerBase
     [HttpGet("leagues/{leagueId}/races")]
     public ActionResult<IEnumerable<RaceReadDTO>> GetByLeague(int leagueId, [FromQuery] RaceQueryParameters query)
     {
-        try
-        {
+
             var league = _leagues.GetById(leagueId);   // 404 if missing
             if (!_viewPolicy.CanView(league, User))
-                return Forbid();
+                throw new IRacingLeague.Business.ForbiddenException("You do not have access to this resource.");
 
             var races = _service.GetByLeague(leagueId, query).Select(RaceReadDTO.FromEntity);
             return Ok(races);
-        }
-        catch (KeyNotFoundException)
-        {
-            return NotFound();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to list races for league {LeagueId}", leagueId);
-            return StatusCode(StatusCodes.Status500InternalServerError);
-        }
+
     }
 
     [HttpGet("races/{id}")]
     public ActionResult<RaceReadDTO> Get(int id)
     {
-        try
-        {
+
             var race = _service.GetById(id);
             var league = _leagues.GetById(race.LeagueId);
             if (!_viewPolicy.CanView(league, User))
-                return Forbid();
+                throw new IRacingLeague.Business.ForbiddenException("You do not have access to this resource.");
 
             return Ok(RaceReadDTO.FromEntity(race));
-        }
-        catch (KeyNotFoundException)
-        {
-            return NotFound();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to fetch race {RaceId}", id);
-            return StatusCode(StatusCodes.Status500InternalServerError);
-        }
+
     }
 
     [HttpPost("leagues/{leagueId}/races")]
     [Authorize]
     public ActionResult<RaceReadDTO> Create(int leagueId, [FromBody] RaceCreateDTO dto)
     {
-        if (!ModelState.IsValid)
-            return BadRequest(ModelState);
 
-        try
-        {
             var league = _leagues.GetById(leagueId);   // 404 if missing
             if (!_auth.HasAccessToResource(league.OwnerUserId, User))
-                return Forbid();
+                throw new IRacingLeague.Business.ForbiddenException("You do not have access to this resource.");
 
             var race = _service.Create(
                 leagueId, dto.Track, dto.Car, dto.ScheduledAt, dto.LapCount, dto.AmbientTempC);
 
             return CreatedAtAction(nameof(Get), new { id = race.RaceId }, RaceReadDTO.FromEntity(race));
-        }
-        catch (KeyNotFoundException)
-        {
-            return NotFound();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to schedule race in league {LeagueId}", leagueId);
-            return StatusCode(StatusCodes.Status500InternalServerError);
-        }
+
     }
 
     [HttpPut("races/{id}")]
     [Authorize]
     public IActionResult Update(int id, [FromBody] RaceUpdateDTO dto)
     {
-        if (!ModelState.IsValid)
-            return BadRequest(ModelState);
 
-        try
-        {
             var race = _service.GetById(id);   // 404 if missing
             var league = _leagues.GetById(race.LeagueId);
             if (!_auth.HasAccessToResource(league.OwnerUserId, User))
-                return Forbid();
+                throw new IRacingLeague.Business.ForbiddenException("You do not have access to this resource.");
 
             race.Track = dto.Track;
             race.Car = dto.Car;
@@ -126,46 +89,21 @@ public class RacesController : ControllerBase
 
             _service.Update(race);
             return NoContent();
-        }
-        catch (KeyNotFoundException)
-        {
-            return NotFound();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to update race {RaceId}", id);
-            return StatusCode(StatusCodes.Status500InternalServerError);
-        }
+
     }
 
     [HttpDelete("races/{id}")]
     [Authorize]
     public IActionResult Delete(int id)
     {
-        try
-        {
+
             var race = _service.GetById(id);   // 404 if missing
             var league = _leagues.GetById(race.LeagueId);
             if (!_auth.HasAccessToResource(league.OwnerUserId, User))
-                return Forbid();
+                throw new IRacingLeague.Business.ForbiddenException("You do not have access to this resource.");
 
             _service.Delete(id);
             return NoContent();
-        }
-        catch (KeyNotFoundException)
-        {
-            return NotFound();
-        }
-        catch (DbUpdateException)
-        {
-            // Defensive fallback: the service cascades a race's results before removing it, so
-            // the Restrict FK shouldn't trip — but surface a 409 rather than a 500 if it does.
-            return Conflict("Cannot delete a race that has recorded results.");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to delete race {RaceId}", id);
-            return StatusCode(StatusCodes.Status500InternalServerError);
-        }
+
     }
 }
