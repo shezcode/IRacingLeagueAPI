@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace IRacingLeague.API.Controllers;
 
 [ApiController]
-[Route("auth")]
+[Route("api/v1/auth")]
 public sealed class AuthController(IAuthService auth) : ControllerBase
 {
     [HttpPost("register")]

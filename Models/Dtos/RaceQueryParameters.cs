@@ -1,6 +1,6 @@
 namespace IRacingLeague.Models.Dtos;
 
-public class RaceQueryParameters
+public class RaceQueryParameters : PaginationParameters
 {
     public string? Track { get; set; }
 

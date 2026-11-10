@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace IRacingLeague.API.Controllers;
 
 [ApiController]
-[Route("leagues")]
+[Route("api/v1/leagues")]
 public sealed class LeaguesController(ILeagueService service, IAuthService auth, LeagueViewPolicy viewPolicy) : ControllerBase
 {
     [HttpGet]

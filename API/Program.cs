@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using System.Reflection;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -86,6 +87,8 @@ builder.Services.AddScoped<IRacingLeague.API.Authorization.LeagueViewPolicy>();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
+    var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
+    options.IncludeXmlComments(Path.Combine(AppContext.BaseDirectory, xmlFile), includeControllerXmlComments: true);
     options.SwaggerDoc("v1", new OpenApiInfo
     {
         Title = "iRacing League API",
@@ -145,6 +148,7 @@ using (var scope = app.Services.CreateScope())
 // Swagger is left on in every environment so the skeleton is verifiable in the container too.
 app.UseSwagger();
 app.UseSwaggerUI();
+app.MapGet("/", () => Results.Redirect("/swagger"));
 
 // Authentication must run before authorization (Step 18 adds [Authorize] policies).
 app.UseAuthentication();

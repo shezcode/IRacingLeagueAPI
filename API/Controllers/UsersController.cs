@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace IRacingLeague.API.Controllers;
 
 [ApiController]
-[Route("users")]
+[Route("api/v1/users")]
 public sealed class UsersController(IUserService service, IAuthService auth) : ControllerBase
 {
     [HttpGet]
