@@ -11,7 +11,16 @@ public sealed class LeagueService(ILeagueRepository repository, IRegistrationSer
     public Task<PagedResponse<League>> GetForUserAsync(int userId, PaginationParameters parameters, CancellationToken cancellationToken = default) => repository.GetForUserAsync(userId, parameters, cancellationToken);
     public async Task<League> GetByIdAsync(int id, CancellationToken cancellationToken = default) => await repository.GetAsync(id, cancellationToken) ?? throw new NotFoundException($"League with id {id} not found.");
     public async Task UpdateAsync(League league, CancellationToken cancellationToken = default)
-    { if (await repository.GetAsync(league.LeagueId, cancellationToken) is null) throw new NotFoundException($"League with id {league.LeagueId} not found."); await repository.UpdateAsync(league, cancellationToken); await unitOfWork.SaveChangesAsync(cancellationToken); }
+    {
+        await unitOfWork.ExecuteInTransactionAsync(async ct =>
+        {
+            await repository.LockForUpdateAsync(league.LeagueId, ct);
+            var current = await repository.GetAsync(league.LeagueId, ct) ?? throw new NotFoundException($"League with id {league.LeagueId} not found.");
+            if (league.MaxDrivers < await repository.CountMembersAsync(league.LeagueId, ct)) throw new ConflictException("MaxDrivers cannot be lower than the current membership count.");
+            current.Name = league.Name; current.Discipline = league.Discipline; current.IsPublic = league.IsPublic; current.MaxDrivers = league.MaxDrivers; current.EntryFee = league.EntryFee;
+            await repository.UpdateAsync(current, ct);
+        }, cancellationToken);
+    }
     public async Task DeleteAsync(int id, CancellationToken cancellationToken = default)
     {
         if (await repository.GetAsync(id, cancellationToken) is null) throw new NotFoundException($"League with id {id} not found.");

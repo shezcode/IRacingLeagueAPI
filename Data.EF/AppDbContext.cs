@@ -24,6 +24,8 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<League>().HasKey(l => l.LeagueId);
         modelBuilder.Entity<League>().Property(l => l.Version).HasColumnName("xmin").IsRowVersion();
         modelBuilder.Entity<Registration>().HasKey(r => r.RegistrationId);
+        modelBuilder.Entity<Registration>().HasIndex(r => new { r.LeagueId, r.UserId }).IsUnique();
+        modelBuilder.Entity<Registration>().HasIndex(r => new { r.LeagueId, r.CarNumber }).IsUnique();
         modelBuilder.Entity<Race>().HasKey(r => r.RaceId);
         modelBuilder.Entity<Race>().Property(r => r.Version).HasColumnName("xmin").IsRowVersion();
         modelBuilder.Entity<Result>().HasKey(r => r.ResultId);

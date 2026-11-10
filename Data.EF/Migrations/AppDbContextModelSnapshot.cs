@@ -64,7 +64,6 @@ namespace IRacingLeague.Data.EF.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer[]")
                         .HasDefaultValue(new[] { 25, 18, 15, 12, 10, 8, 6, 4, 2, 1 });
-
                     b.Property<uint>("Version")
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAddOrUpdate()
@@ -201,9 +200,13 @@ namespace IRacingLeague.Data.EF.Migrations
 
                     b.HasKey("RegistrationId");
 
-                    b.HasIndex("LeagueId");
-
                     b.HasIndex("UserId");
+
+                    b.HasIndex("LeagueId", "CarNumber")
+                        .IsUnique();
+
+                    b.HasIndex("LeagueId", "UserId")
+                        .IsUnique();
 
                     b.ToTable("Registrations");
                 });
