@@ -9,6 +9,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Reflection;
 using IRacingLeague.API.Swagger;
+using IRacingLeague.API;
 using System.Net;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -137,8 +138,11 @@ builder.Services.AddScoped<IRegistrationService, RegistrationService>();
 builder.Services.AddScoped<IResultService, ResultService>();
 builder.Services.AddScoped<IRatingReplayService, RatingReplayService>();
 builder.Services.AddSingleton<RatingCalculator>();
+builder.Services.AddSingleton<CsvClassificationParser>();
 builder.Services.AddScoped<IStandingsService, StandingsService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<DemoDataSeeder>();
+builder.Services.AddHostedService<DailyDemoResetService>();
 
 // Shared private-zone read rule used by every league-scoped controller.
 builder.Services.AddScoped<IRacingLeague.API.Authorization.LeagueViewPolicy>();
@@ -204,18 +208,8 @@ using (var scope = app.Services.CreateScope())
         }
     }
 
-    if (DbSeeder.Seed(db))
-    {
-        var firstResultRace = await (from result in db.Results
-                                     join race in db.Races on result.RaceId equals race.RaceId
-                                     orderby race.ScheduledAt, race.RaceId
-                                     select new { race.ScheduledAt, race.RaceId }).FirstAsync();
-        var registrationIds = await db.Results.Select(result => result.RegistrationId).Distinct().ToArrayAsync();
-        var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var ratingReplay = scope.ServiceProvider.GetRequiredService<IRatingReplayService>();
-        await unitOfWork.ExecuteInTransactionAsync(ct =>
-            ratingReplay.ReplayFromAsync(firstResultRace.ScheduledAt, firstResultRace.RaceId, registrationIds, ct));
-    }
+    var demoSeeder = scope.ServiceProvider.GetRequiredService<DemoDataSeeder>();
+    await demoSeeder.SeedIfNeededAsync(reset: app.Configuration.GetValue<bool>("Demo:Enabled"));
 }
 
 // Swagger is left on in every environment so the skeleton is verifiable in the container too.

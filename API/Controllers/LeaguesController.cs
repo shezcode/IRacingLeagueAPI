@@ -69,7 +69,7 @@ public sealed class LeaguesController(ILeagueService service, IAuthService auth,
         if (!auth.HasAccessToResource(league.OwnerUserId, User)) throw new ForbiddenException("You do not have access to this resource.");
         if (!Matches(ifMatch, league.Version)) throw new PreconditionFailedException("The If-Match value does not match the current resource version.");
         league.Name = dto.Name; league.Discipline = dto.Discipline; league.IsPublic = dto.IsPublic; league.MaxDrivers = dto.MaxDrivers; league.EntryFee = dto.EntryFee;
-        await service.UpdateAsync(league, ct);
+        await service.UpdateAsync(league, dto.PointsTable, dto.FastestLapBonus, ct);
         return NoContent();
     }
 

@@ -418,7 +418,7 @@ namespace IRacingLeague.Data.EF.Migrations
                     b.HasOne("IRacingLeague.Models.League", null)
                         .WithMany()
                         .HasForeignKey("LeagueId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 
@@ -436,13 +436,13 @@ namespace IRacingLeague.Data.EF.Migrations
                     b.HasOne("IRacingLeague.Models.League", null)
                         .WithMany()
                         .HasForeignKey("LeagueId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.HasOne("IRacingLeague.Models.User", null)
                         .WithMany()
                         .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 
@@ -451,13 +451,13 @@ namespace IRacingLeague.Data.EF.Migrations
                     b.HasOne("IRacingLeague.Models.Race", null)
                         .WithMany()
                         .HasForeignKey("RaceId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.HasOne("IRacingLeague.Models.Registration", null)
                         .WithMany()
                         .HasForeignKey("RegistrationId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 #pragma warning restore 612, 618

@@ -31,6 +31,11 @@ public sealed class EfResultRepository(AppDbContext context) : IResultRepository
         return new PagedResponse<Result>(items, p.Page, p.PageSize, totalCount);
     }
     public async Task<IReadOnlyList<Result>> GetByRegistrationAsync(int registrationId, CancellationToken cancellationToken = default) => await context.Results.Where(r => r.RegistrationId == registrationId).ToListAsync(cancellationToken);
+    public async Task<IReadOnlyList<Result>> GetByLeagueAsync(int leagueId, CancellationToken cancellationToken = default) =>
+        await (from result in context.Results
+               join race in context.Races on result.RaceId equals race.RaceId
+               where race.LeagueId == leagueId
+               select result).ToListAsync(cancellationToken);
     public Task<Result?> FindForRaceAndRegistrationAsync(int raceId, int registrationId, CancellationToken cancellationToken = default) => context.Results.FirstOrDefaultAsync(r => r.RaceId == raceId && r.RegistrationId == registrationId, cancellationToken);
     public Task UpdateAsync(Result result, CancellationToken cancellationToken = default)
     { cancellationToken.ThrowIfCancellationRequested(); context.Results.Update(result); return Task.CompletedTask; }

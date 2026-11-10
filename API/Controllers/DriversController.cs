@@ -9,7 +9,7 @@ namespace IRacingLeague.API.Controllers;
 [ApiController]
 [Route("api/v1/drivers")]
 [Tags("Drivers")]
-public sealed class DriversController(IUserService service) : ControllerBase
+public sealed class DriversController(IUserService service, IAuthService auth) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<PagedResponse<DriverProfileDTO>>> GetAll([FromQuery] UserQueryParameters query, CancellationToken ct)
@@ -20,6 +20,14 @@ public sealed class DriversController(IUserService service) : ControllerBase
 
     [HttpGet("{id:int}")]
     public async Task<ActionResult<DriverProfileDTO>> Get(int id, CancellationToken ct) => Ok(DriverProfileDTO.FromEntity(await service.GetByIdAsync(id, ct)));
+
+    /// <summary>Gets a driver's career totals and rating history from leagues visible to the caller.</summary>
+    [HttpGet("{id:int}/stats")]
+    [ProducesResponseType(typeof(DriverStatsDTO), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
+    public async Task<ActionResult<DriverStatsDTO>> GetStats(int id, CancellationToken ct) =>
+        Ok(await service.GetDriverStatsAsync(id, auth.GetUserId(User), User.IsInRole(nameof(Roles.Admin)), ct));
 
     [HttpDelete("{id:int}")]
     [Authorize(Roles = nameof(Roles.Admin))]

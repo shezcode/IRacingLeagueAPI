@@ -3,7 +3,7 @@ using IRacingLeague.Models;
 using IRacingLeague.Models.Dtos;
 namespace IRacingLeague.Business;
 
-public sealed class RaceService(IRaceRepository races, ILeagueRepository leagues, IResultService results, IUnitOfWork unitOfWork) : IRaceService
+public sealed class RaceService(IRaceRepository races, ILeagueRepository leagues, IResultRepository results, IRatingReplayRepository replayRepository, IRatingReplayService ratingReplay, IUnitOfWork unitOfWork) : IRaceService
 {
     public async Task<Race> CreateAsync(int leagueId, string track, string car, DateTime scheduledAt, int lapCount, decimal ambientTempC, CancellationToken cancellationToken = default)
     {
@@ -24,7 +24,17 @@ public sealed class RaceService(IRaceRepository races, ILeagueRepository leagues
     public async Task DeleteAsync(int id, CancellationToken cancellationToken = default)
     {
         var race = await races.GetAsync(id, cancellationToken) ?? throw new NotFoundException($"Race with id {id} not found.");
-        await unitOfWork.ExecuteInTransactionAsync(async ct => { await results.DeleteForRaceAsync(id, ct); await races.DeleteAsync(id, ct); await RenumberRoundsAsync(race.LeagueId, ct); }, cancellationToken);
+        var deletedResults = await results.GetByRaceAsync(id, cancellationToken);
+        var registrationIds = deletedResults.Select(x => x.RegistrationId).Distinct().ToArray();
+        var userIds = await replayRepository.GetUserIdsForRegistrationsAsync(registrationIds, cancellationToken);
+        await unitOfWork.ExecuteInTransactionAsync(async ct =>
+        {
+            await races.DeleteAsync(id, ct);
+            await unitOfWork.SaveChangesAsync(ct);
+            await RenumberRoundsAsync(race.LeagueId, ct);
+            if (deletedResults.Count > 0)
+                await ratingReplay.ReplayFromAsync(race.ScheduledAt, race.RaceId, registrationIds, ct, userIds);
+        }, cancellationToken);
     }
     private async Task RenumberRoundsAsync(int leagueId, CancellationToken ct)
     {

@@ -5,15 +5,16 @@ namespace IRacingLeague.Business;
 
 public interface IRatingReplayService
 {
-    Task ReplayFromAsync(DateTime scheduledAt, int raceId, IReadOnlyCollection<int> changedRegistrationIds, CancellationToken cancellationToken = default);
+    Task ReplayFromAsync(DateTime scheduledAt, int raceId, IReadOnlyCollection<int> changedRegistrationIds, CancellationToken cancellationToken = default, IReadOnlyCollection<int>? changedUserIds = null);
 }
 
 public sealed class RatingReplayService(IRatingReplayRepository replayRepository, IUserRepository users, RatingCalculator calculator) : IRatingReplayService
 {
-    public async Task ReplayFromAsync(DateTime scheduledAt, int raceId, IReadOnlyCollection<int> changedRegistrationIds, CancellationToken cancellationToken = default)
+    public async Task ReplayFromAsync(DateTime scheduledAt, int raceId, IReadOnlyCollection<int> changedRegistrationIds, CancellationToken cancellationToken = default, IReadOnlyCollection<int>? changedUserIds = null)
     {
         await replayRepository.AcquireGlobalLockAsync(cancellationToken);
         var affectedUserIds = (await replayRepository.GetUserIdsForRegistrationsAsync(changedRegistrationIds, cancellationToken)).ToHashSet();
+        if (changedUserIds is not null) affectedUserIds.UnionWith(changedUserIds);
         var before = await replayRepository.GetEntriesBeforeAsync(scheduledAt, raceId, cancellationToken);
         var after = await replayRepository.GetEntriesFromAsync(scheduledAt, raceId, cancellationToken);
         var states = before.GroupBy(x => x.UserId).ToDictionary(g => g.Key, g =>

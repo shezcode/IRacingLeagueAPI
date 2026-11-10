@@ -8,6 +8,6 @@ public interface ILeagueService
     Task<PagedResponse<League>> GetPublicAsync(LeagueQueryParameters parameters, CancellationToken cancellationToken = default);
     Task<PagedResponse<League>> GetForUserAsync(int userId, PaginationParameters parameters, CancellationToken cancellationToken = default);
     Task<League> GetByIdAsync(int id, CancellationToken cancellationToken = default);
-    Task UpdateAsync(League league, CancellationToken cancellationToken = default);
+    Task UpdateAsync(League league, int[]? pointsTable = null, int? fastestLapBonus = null, CancellationToken cancellationToken = default);
     Task DeleteAsync(int id, CancellationToken cancellationToken = default);
 }

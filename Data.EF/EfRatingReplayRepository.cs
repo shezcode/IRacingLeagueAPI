@@ -16,6 +16,16 @@ public sealed class EfRatingReplayRepository(AppDbContext context) : IRatingRepl
             .Select(x => x.UserId).Distinct().ToListAsync(cancellationToken);
     }
 
+    public async Task<Race?> GetEarliestRaceForRegistrationsAsync(IReadOnlyCollection<int> registrationIds, CancellationToken cancellationToken = default)
+    {
+        if (registrationIds.Count == 0) return null;
+        return await (from result in context.Results.AsNoTracking()
+                      join race in context.Races.AsNoTracking() on result.RaceId equals race.RaceId
+                      where registrationIds.Contains(result.RegistrationId) && race.IsCompleted
+                      orderby race.ScheduledAt, race.RaceId
+                      select race).FirstOrDefaultAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<RatingReplayEntry>> GetEntriesBeforeAsync(DateTime scheduledAt, int raceId, CancellationToken cancellationToken = default)
     {
         var query = from result in context.Results

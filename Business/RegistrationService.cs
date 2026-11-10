@@ -5,7 +5,7 @@ using System.Security.Cryptography;
 using System.Text;
 namespace IRacingLeague.Business;
 
-public sealed class RegistrationService(IRegistrationRepository registrations, ILeagueRepository leagues, ILeagueInviteRepository invites, IResultService results, IUnitOfWork unitOfWork) : IRegistrationService
+public sealed class RegistrationService(IRegistrationRepository registrations, ILeagueRepository leagues, ILeagueInviteRepository invites, IRatingReplayRepository replayRepository, IRatingReplayService ratingReplay, IUnitOfWork unitOfWork) : IRegistrationService
 {
     public async Task<Registration> RegisterAsync(int userId, int leagueId, int carNumber, string teamName, decimal ballastKg, string? inviteToken = null, bool requireInvite = true, CancellationToken cancellationToken = default)
     {
@@ -55,5 +55,15 @@ public sealed class RegistrationService(IRegistrationRepository registrations, I
     public Task<IReadOnlyList<Registration>> GetByUserAsync(int userId, CancellationToken cancellationToken = default) => registrations.GetByUserAsync(userId, cancellationToken);
     public async Task<Registration> GetByIdAsync(int id, CancellationToken cancellationToken = default) => await registrations.GetAsync(id, cancellationToken) ?? throw new NotFoundException($"Registration with id {id} not found.");
     public async Task DeleteAsync(int id, CancellationToken cancellationToken = default)
-    { if (await registrations.GetAsync(id, cancellationToken) is null) throw new NotFoundException($"Registration with id {id} not found."); await unitOfWork.ExecuteInTransactionAsync(async ct => { await results.DeleteForRegistrationAsync(id, ct); await registrations.DeleteAsync(id, ct); }, cancellationToken); }
+    {
+        var registration = await registrations.GetAsync(id, cancellationToken) ?? throw new NotFoundException($"Registration with id {id} not found.");
+        var firstAffectedRace = await replayRepository.GetEarliestRaceForRegistrationsAsync([id], cancellationToken);
+        await unitOfWork.ExecuteInTransactionAsync(async ct =>
+        {
+            await registrations.DeleteAsync(id, ct);
+            await unitOfWork.SaveChangesAsync(ct);
+            if (firstAffectedRace is not null)
+                await ratingReplay.ReplayFromAsync(firstAffectedRace.ScheduledAt, firstAffectedRace.RaceId, [id], ct, [registration.UserId]);
+        }, cancellationToken);
+    }
 }

@@ -56,39 +56,35 @@ public class AppDbContext : DbContext
         // The FK scalar already exists on each child (e.g. Registration.UserId), so we map to it
         // explicitly and rely on it rather than EF inventing a shadow FK.
         //
-        // DeleteBehavior.Restrict on every relationship: Result has two parents (Registration, Race)
-        // and Registration has two (User, League). Deletes here are administrative and rare, so Restrict is the safe choice —
-        // a parent must be cleared of children before it can be removed.
-
-        // User 1—* Registration
+        // PostgreSQL cascades dependent data; league owners remain restricted below.
         modelBuilder.Entity<Registration>()
             .HasOne<User>().WithMany()
             .HasForeignKey(r => r.UserId)
-            .OnDelete(DeleteBehavior.Restrict);
+            .OnDelete(DeleteBehavior.Cascade);
 
         // League 1—* Registration
         modelBuilder.Entity<Registration>()
             .HasOne<League>().WithMany()
             .HasForeignKey(r => r.LeagueId)
-            .OnDelete(DeleteBehavior.Restrict);
+            .OnDelete(DeleteBehavior.Cascade);
 
         // League 1—* Race
         modelBuilder.Entity<Race>()
             .HasOne<League>().WithMany()
             .HasForeignKey(r => r.LeagueId)
-            .OnDelete(DeleteBehavior.Restrict);
+            .OnDelete(DeleteBehavior.Cascade);
 
         // Registration 1—* Result
         modelBuilder.Entity<Result>()
             .HasOne<Registration>().WithMany()
             .HasForeignKey(r => r.RegistrationId)
-            .OnDelete(DeleteBehavior.Restrict);
+            .OnDelete(DeleteBehavior.Cascade);
 
         // Race 1—* Result
         modelBuilder.Entity<Result>()
             .HasOne<Race>().WithMany()
             .HasForeignKey(r => r.RaceId)
-            .OnDelete(DeleteBehavior.Restrict);
+            .OnDelete(DeleteBehavior.Cascade);
 
         // League.OwnerUserId —* User (the owner; not a collection navigation on User)
         modelBuilder.Entity<League>()

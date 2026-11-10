@@ -11,6 +11,7 @@ public interface IUserRepository
     Task<User?> FindByEmailAsync(string email, CancellationToken cancellationToken = default);
     Task<bool> EmailExistsAsync(string email, CancellationToken cancellationToken = default);
     Task<PagedResponse<User>> QueryAsync(UserQueryParameters parameters, CancellationToken cancellationToken = default);
+    Task<DriverStatsDTO> GetDriverStatsAsync(int userId, int? viewerUserId, bool canViewAllPrivate, CancellationToken cancellationToken = default);
     Task UpdateAsync(User user, CancellationToken cancellationToken = default);
     Task DeleteAsync(int id, CancellationToken cancellationToken = default);
 }

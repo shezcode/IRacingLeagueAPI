@@ -7,6 +7,7 @@ public interface ILeagueRepository
 {
     Task AddAsync(League league, CancellationToken cancellationToken = default);
     Task<League?> GetAsync(int id, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<League>> GetAllAsync(CancellationToken cancellationToken = default);
     Task LockForUpdateAsync(int id, CancellationToken cancellationToken = default);
     Task<int> CountMembersAsync(int id, CancellationToken cancellationToken = default);
     Task<PagedResponse<League>> GetPublicAsync(LeagueQueryParameters parameters, CancellationToken cancellationToken = default);

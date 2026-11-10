@@ -8,28 +8,8 @@ public sealed class ResultService(IResultRepository results, IRegistrationReposi
 {
     public async Task ReplaceClassificationAsync(int raceId, IReadOnlyList<ClassificationEntryDTO> entries, CancellationToken cancellationToken = default)
     {
-        var race = await races.GetAsync(raceId, cancellationToken) ?? throw new NotFoundException($"Race with id {raceId} not found.");
-        var league = await leagues.GetAsync(race.LeagueId, cancellationToken) ?? throw new NotFoundException($"League with id {race.LeagueId} not found.");
+        var (race, scored) = await BuildClassificationAsync(raceId, entries, cancellationToken);
         var previousRegistrationIds = (await results.GetByRaceAsync(raceId, cancellationToken)).Select(x => x.RegistrationId);
-        var errors = Validate(entries, race, league);
-        var members = await registrations.GetByLeagueAsync(race.LeagueId, cancellationToken);
-        var memberIds = members.Select(x => x.RegistrationId).ToHashSet();
-        if (entries.Count > members.Count) errors.Add($"Classification cannot contain more than the league's {members.Count} registered members.");
-        if (entries.Any(x => !memberIds.Contains(x.RegistrationId))) errors.Add("Every registration must belong to this race's league.");
-        if (errors.Count > 0) throw new DomainValidationException(string.Join("; ", errors));
-        var fastestLapEntry = entries
-            .Where(x => !x.Dnf && x.FastestLapSeconds > 0)
-            .OrderBy(x => x.FastestLapSeconds)
-            .ThenBy(x => x.Position)
-            .FirstOrDefault();
-        var scored = entries.Select(e =>
-        {
-            var fastestLap = fastestLapEntry is not null && fastestLapEntry.RegistrationId == e.RegistrationId;
-            var points = e.Dnf ? 0 : Score(league.PointsTable, e.Position) + (fastestLap ? league.FastestLapBonus : 0);
-            var result = new Result(e.RegistrationId, raceId, e.Position, e.FastestLapSeconds, points,
-                e.IncidentPoints, e.Dnf, e.Notes) { FastestLap = fastestLap };
-            return result;
-        }).ToList();
         await unitOfWork.ExecuteInTransactionAsync(async ct =>
         {
             await results.ReplaceRaceAsync(raceId, scored, ct);
@@ -39,6 +19,31 @@ public sealed class ResultService(IResultRepository results, IRegistrationReposi
             await ratingReplay.ReplayFromAsync(race.ScheduledAt, raceId,
                 previousRegistrationIds.Concat(entries.Select(x => x.RegistrationId)).Distinct().ToArray(), ct);
         }, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<Result>> PreviewClassificationAsync(int raceId, IReadOnlyList<ClassificationEntryDTO> entries, CancellationToken cancellationToken = default) =>
+        (await BuildClassificationAsync(raceId, entries, cancellationToken)).Scored;
+
+    private async Task<(Race Race, List<Result> Scored)> BuildClassificationAsync(int raceId, IReadOnlyList<ClassificationEntryDTO> entries, CancellationToken cancellationToken)
+    {
+        var race = await races.GetAsync(raceId, cancellationToken) ?? throw new NotFoundException($"Race with id {raceId} not found.");
+        var league = await leagues.GetAsync(race.LeagueId, cancellationToken) ?? throw new NotFoundException($"League with id {race.LeagueId} not found.");
+        var errors = Validate(entries, race, league);
+        var members = await registrations.GetByLeagueAsync(race.LeagueId, cancellationToken);
+        var memberIds = members.Select(x => x.RegistrationId).ToHashSet();
+        if (entries.Count > members.Count) errors.Add($"Classification cannot contain more than the league's {members.Count} registered members.");
+        if (entries.Any(x => !memberIds.Contains(x.RegistrationId))) errors.Add("Every registration must belong to this race's league.");
+        if (errors.Count > 0) throw new DomainValidationException(string.Join("; ", errors));
+        var fastestLapEntry = entries.Where(x => !x.Dnf && x.FastestLapSeconds > 0)
+            .OrderBy(x => x.FastestLapSeconds).ThenBy(x => x.Position).FirstOrDefault();
+        var scored = entries.Select(e =>
+        {
+            var fastestLap = fastestLapEntry is not null && fastestLapEntry.RegistrationId == e.RegistrationId;
+            var points = e.Dnf ? 0 : Score(league.PointsTable, e.Position) + (fastestLap ? league.FastestLapBonus : 0);
+            return new Result(e.RegistrationId, raceId, e.Position, e.FastestLapSeconds, points,
+                e.IncidentPoints, e.Dnf, e.Notes) { FastestLap = fastestLap };
+        }).ToList();
+        return (race, scored);
     }
 
     public async Task ClearClassificationAsync(int raceId, CancellationToken cancellationToken = default)
@@ -74,6 +79,4 @@ public sealed class ResultService(IResultRepository results, IRegistrationReposi
     public Task<PagedResponse<Result>> GetByRacePageAsync(int raceId, PaginationParameters parameters, CancellationToken cancellationToken = default) => results.GetByRacePageAsync(raceId, parameters, cancellationToken);
     public async Task<Result> GetByIdAsync(int id, CancellationToken cancellationToken = default) => await results.GetAsync(id, cancellationToken) ?? throw new NotFoundException($"Result with id {id} not found.");
     public Task DeleteAsync(int id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task DeleteForRaceAsync(int raceId, CancellationToken cancellationToken = default) => ClearClassificationAsync(raceId, cancellationToken);
-    public Task DeleteForRegistrationAsync(int registrationId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 }
