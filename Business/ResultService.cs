@@ -13,13 +13,22 @@ public sealed class ResultService(IResultRepository results, IRegistrationReposi
         var errors = Validate(entries, race, league);
         var members = await registrations.GetByLeagueAsync(race.LeagueId, cancellationToken);
         var memberIds = members.Select(x => x.RegistrationId).ToHashSet();
+        if (entries.Count > members.Count) errors.Add($"Classification cannot contain more than the league's {members.Count} registered members.");
         if (entries.Any(x => !memberIds.Contains(x.RegistrationId))) errors.Add("Every registration must belong to this race's league.");
         if (errors.Count > 0) throw new DomainValidationException(string.Join("; ", errors));
-        var scored = entries.Select(e => new Result(e.RegistrationId, raceId, e.Position, e.FastestLapSeconds,
-            Score(league.PointsTable, e.Position) + (e.FastestLapSeconds > 0 && e.FastestLapSeconds == entries.Where(x => x.FastestLapSeconds > 0).Min(x => x.FastestLapSeconds) ? league.FastestLapBonus : 0),
-            e.IncidentPoints, e.Dnf, e.Notes)).ToList();
-        if (scored.Count > 0 && scored.Any(r => r.FastestLapSeconds == scored.Where(x => x.FastestLapSeconds > 0).Select(x => x.FastestLapSeconds).DefaultIfEmpty(0).Min()))
-            foreach (var result in scored) result.FastestLap = result.FastestLapSeconds > 0 && result.FastestLapSeconds == scored.Where(x => x.FastestLapSeconds > 0).Min(x => x.FastestLapSeconds);
+        var fastestLapEntry = entries
+            .Where(x => !x.Dnf && x.FastestLapSeconds > 0)
+            .OrderBy(x => x.FastestLapSeconds)
+            .ThenBy(x => x.Position)
+            .FirstOrDefault();
+        var scored = entries.Select(e =>
+        {
+            var fastestLap = fastestLapEntry is not null && fastestLapEntry.RegistrationId == e.RegistrationId;
+            var points = e.Dnf ? 0 : Score(league.PointsTable, e.Position) + (fastestLap ? league.FastestLapBonus : 0);
+            var result = new Result(e.RegistrationId, raceId, e.Position, e.FastestLapSeconds, points,
+                e.IncidentPoints, e.Dnf, e.Notes) { FastestLap = fastestLap };
+            return result;
+        }).ToList();
         await unitOfWork.ExecuteInTransactionAsync(async ct =>
         {
             await results.ReplaceRaceAsync(raceId, scored, ct);
@@ -47,13 +56,13 @@ public sealed class ResultService(IResultRepository results, IRegistrationReposi
         if (entries.Any(x => x.RegistrationId <= 0 || x.Position <= 0 || x.Position > 999 || x.IncidentPoints < 0 || x.IncidentPoints > 100 || x.FastestLapSeconds < 0 || x.FastestLapSeconds > 9999)) errors.Add("One or more classification values are out of range.");
         try
         {
-            var points = league.PointsTable.Split(',').Select(int.Parse).ToArray();
-            if (points.Length == 0 || points.Any(x => x < 0 || x > 1000) || points.Zip(points.Skip(1)).Any(p => p.First < p.Second) || league.FastestLapBonus < 0 || league.FastestLapBonus > 1000) errors.Add("League points table or fastest lap bonus is invalid.");
+            var points = league.PointsTable;
+            if (points.Length is < 1 or > 50 || points.Any(x => x < 0 || x > 1000) || points.Zip(points.Skip(1)).Any(p => p.First < p.Second) || league.FastestLapBonus is < 0 or > 50) errors.Add("League points table or fastest lap bonus is invalid.");
         }
-        catch { errors.Add("League points table must contain comma-separated integer points."); }
+        catch { errors.Add("League points table must contain between 1 and 50 integer point values."); }
         return errors;
     }
-    private static int Score(string table, int position) { var points = table.Split(',').Select(int.Parse).ToArray(); return position <= points.Length ? points[position - 1] : 0; }
+    private static int Score(int[] table, int position) => position <= table.Length ? table[position - 1] : 0;
     public Task<IReadOnlyList<Result>> GetByRaceAsync(int raceId, CancellationToken cancellationToken = default) => results.GetByRaceAsync(raceId, cancellationToken);
     public Task<PagedResponse<Result>> GetByRacePageAsync(int raceId, PaginationParameters parameters, CancellationToken cancellationToken = default) => results.GetByRacePageAsync(raceId, parameters, cancellationToken);
     public async Task<Result> GetByIdAsync(int id, CancellationToken cancellationToken = default) => await results.GetAsync(id, cancellationToken) ?? throw new NotFoundException($"Result with id {id} not found.");

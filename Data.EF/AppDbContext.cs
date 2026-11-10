@@ -35,7 +35,7 @@ public class AppDbContext : DbContext
 
         // Set decimal precision explicitly to keep the schema stable across providers.
         modelBuilder.Entity<League>().Property(l => l.EntryFee).HasPrecision(10, 2);
-        modelBuilder.Entity<League>().Property(l => l.PointsTable).HasDefaultValue("25,18,15,12,10,8,6,4,2,1");
+        modelBuilder.Entity<League>().Property(l => l.PointsTable).HasColumnType("integer[]").HasDefaultValue(new[] { 25, 18, 15, 12, 10, 8, 6, 4, 2, 1 });
         modelBuilder.Entity<League>().Property(l => l.FastestLapBonus).HasDefaultValue(1);
         modelBuilder.Entity<User>().Property(u => u.SafetyRating).HasPrecision(4, 2);
         modelBuilder.Entity<Registration>().Property(r => r.BallastKg).HasPrecision(6, 2);

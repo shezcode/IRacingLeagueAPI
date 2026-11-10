@@ -32,12 +32,12 @@ namespace IRacingLeague.Data.EF.Migrations
                 nullable: false,
                 defaultValue: 1);
 
-            migrationBuilder.AddColumn<string>(
+            migrationBuilder.AddColumn<int[]>(
                 name: "PointsTable",
                 table: "Leagues",
-                type: "text",
+                type: "integer[]",
                 nullable: false,
-                defaultValue: "25,18,15,12,10,8,6,4,2,1");
+                defaultValue: new[] { 25, 18, 15, 12, 10, 8, 6, 4, 2, 1 });
 
             migrationBuilder.CreateIndex(
                 name: "IX_Results_RaceId_Position",

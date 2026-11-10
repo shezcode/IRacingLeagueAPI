@@ -59,11 +59,11 @@ namespace IRacingLeague.Data.EF.Migrations
                     b.Property<int>("OwnerUserId")
                         .HasColumnType("integer");
 
-                    b.Property<string>("PointsTable")
+                    b.Property<int[]>("PointsTable")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
-                        .HasDefaultValue("25,18,15,12,10,8,6,4,2,1");
+                        .HasColumnType("integer[]")
+                        .HasDefaultValue(new[] { 25, 18, 15, 12, 10, 8, 6, 4, 2, 1 });
 
                     b.Property<uint>("Version")
                         .IsConcurrencyToken()
