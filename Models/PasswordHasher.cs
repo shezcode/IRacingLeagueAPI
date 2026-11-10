@@ -1,16 +1,12 @@
-using System.Security.Cryptography;
-using System.Text;
+using Microsoft.AspNetCore.Identity;
 
 namespace IRacingLeague.Models;
 
-// Single source of truth for password hashing. SHA256, hex-encoded, lowercase.
-// Used by registration, login verification, the seeder and UserService.Create so
-// every persisted password hash is produced identically.
+// ASP.NET Identity's format includes a version, per-password salt, and work factor.
 public static class PasswordHasher
 {
-    public static string Hash(string password)
-    {
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(password));
-        return Convert.ToHexString(bytes).ToLowerInvariant();
-    }
+    private static readonly PasswordHasher<object> Hasher = new();
+    public static string Hash(string password) => Hasher.HashPassword(new object(), password);
+    public static bool Verify(string hashedPassword, string password) =>
+        Hasher.VerifyHashedPassword(new object(), hashedPassword, password) != PasswordVerificationResult.Failed;
 }
