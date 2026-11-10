@@ -24,7 +24,7 @@ public class AppDbContext : DbContext
         // --- Constraints ---
         modelBuilder.Entity<User>().HasIndex(u => u.Email).IsUnique();
 
-        // decimal precision — SQL Server defaults to (18,2); set explicitly to avoid silent truncation warnings.
+        // Set decimal precision explicitly to keep the schema stable across providers.
         modelBuilder.Entity<League>().Property(l => l.EntryFee).HasPrecision(10, 2);
         modelBuilder.Entity<User>().Property(u => u.SafetyRating).HasPrecision(4, 2);
         modelBuilder.Entity<Registration>().Property(r => r.BallastKg).HasPrecision(6, 2);
@@ -35,8 +35,7 @@ public class AppDbContext : DbContext
         // explicitly and rely on it rather than EF inventing a shadow FK.
         //
         // DeleteBehavior.Restrict on every relationship: Result has two parents (Registration, Race)
-        // and Registration has two (User, League), so SQL Server would reject the default multiple
-        // cascade paths. Deletes here are administrative and rare, so Restrict is the safe choice —
+        // and Registration has two (User, League). Deletes here are administrative and rare, so Restrict is the safe choice —
         // a parent must be cleared of children before it can be removed.
 
         // User 1—* Registration

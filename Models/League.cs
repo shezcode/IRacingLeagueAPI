@@ -22,7 +22,7 @@ public class League
         MaxDrivers = maxDrivers;
         EntryFee = entryFee;
         OwnerUserId = ownerUserId;
-        CreatedAt = DateTime.Now;
+        CreatedAt = DateTime.UtcNow;
     }
 
     public override string ToString() =>

@@ -24,7 +24,7 @@ public class Registration
         BallastKg = ballastKg;
         Points = 0;
         IsActive = true;
-        JoinedLeagueAt = DateTime.Now;
+        JoinedLeagueAt = DateTime.UtcNow;
     }
 
     public void AddPoints(int points) => Points += points;

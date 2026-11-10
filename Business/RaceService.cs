@@ -22,7 +22,7 @@ public class RaceService : IRaceService
         if (_leagues.Get(leagueId) == null)
             throw new KeyNotFoundException($"League with id {leagueId} not found.");
 
-        var race = new Race(leagueId, track, car, scheduledAt, lapCount, ambientTempC);
+        var race = new Race(leagueId, track, car, AsUtc(scheduledAt), lapCount, ambientTempC);
         _races.Add(race);
         _races.SaveChanges();       // populates race.RaceId
 
@@ -41,9 +41,15 @@ public class RaceService : IRaceService
         if (!string.IsNullOrWhiteSpace(p.Track))
             q = q.Where(r => r.Track.Contains(p.Track));   // case-insensitive via DB collation
         if (p.ScheduledFrom.HasValue)
-            q = q.Where(r => r.ScheduledAt >= p.ScheduledFrom.Value);
+        {
+            var scheduledFrom = AsUtc(p.ScheduledFrom.Value);
+            q = q.Where(r => r.ScheduledAt >= scheduledFrom);
+        }
         if (p.ScheduledTo.HasValue)
-            q = q.Where(r => r.ScheduledAt <= p.ScheduledTo.Value);
+        {
+            var scheduledTo = AsUtc(p.ScheduledTo.Value);
+            q = q.Where(r => r.ScheduledAt <= scheduledTo);
+        }
 
         q = p.SortBy?.ToLowerInvariant() switch
         {
@@ -65,6 +71,7 @@ public class RaceService : IRaceService
 
     public void Update(Race race)
     {
+        race.ScheduledAt = AsUtc(race.ScheduledAt);
         if (_races.Get(race.RaceId) == null)
             throw new KeyNotFoundException($"Race with id {race.RaceId} not found.");
         _races.Update(race);
@@ -74,6 +81,15 @@ public class RaceService : IRaceService
         // re-derive rounds. Idempotent when the order is unchanged.
         RenumberRounds(race.LeagueId);
     }
+
+    // JSON timestamps without an offset deserialize as Unspecified. The API contract
+    // treats those wall-clock values as UTC; explicit local values are converted.
+    private static DateTime AsUtc(DateTime value) => value.Kind switch
+    {
+        DateTimeKind.Utc => value,
+        DateTimeKind.Local => value.ToUniversalTime(),
+        _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
+    };
 
     public void Delete(int id)
     {

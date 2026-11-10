@@ -30,7 +30,7 @@ public class User
         SafetyRating = 2.50m;
         TotalWins = 0;
         IsActive = true;
-        JoinedAt = DateTime.Now;
+        JoinedAt = DateTime.UtcNow;
     }
 
     public void ApplyRaceOutcome(int position, int incidentPoints)

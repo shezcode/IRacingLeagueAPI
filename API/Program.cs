@@ -31,10 +31,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 builder.Services.AddAuthorization();
 
-// EF Core against SQL Server. The connection string is overridable via the
+// EF Core against PostgreSQL. The connection string is overridable via the
 // ConnectionStrings__ServerDB environment variable (used by Docker Compose in Step 20).
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("ServerDB")));
+    options.UseNpgsql(builder.Configuration.GetConnectionString("ServerDB")));
 
 // Composition root: EF repositories replace the CLI's in-memory/JSON ones, so the
 // reused Business services run unchanged. Scoped to match the DbContext lifetime.
@@ -90,10 +90,9 @@ builder.Services.AddSwaggerGen(options =>
 
 var app = builder.Build();
 
-// Apply pending EF Core migrations on boot so the containerized DB (Step 20) is
+// Apply pending EF Core migrations on boot so the containerized DB is
 // schema-ready without a manual `dotnet ef database update`. Idempotent: a no-op when
-// the schema is current. Retried because `depends_on` only waits for the DB process to
-// start, not for SQL Server to finish warming up and accept connections.
+// the schema is current. Retry transient connection errors during database startup.
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();

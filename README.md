@@ -3,7 +3,7 @@ Vamos a crear una API Rest que en este caso exponga los recursos accesibles por 
 y sobre esa URL se actuara con verbos HTTP: GET para recibir la informacion, POST para crear, PUT para actualizar y DELETE para borrar.
 Cada peticion a su vez, recibe un codigo de estado para saber lo que ha pasado: 200 OK, 201 creado, 204 correcto sin contenido, 307 redireccion, 400 peticion mal formulada, 401 no autenticado, 403 sin permiso/no autorizado, 404 recurso no encontrado.
 La arquitectura por capas sigue el mismo diseño que la app anterior de CLI, pero en este caso la capa de presentacion en vez tener una consola, estara compuesta por
-un conjunto de controladores, y la capa de datos no persistira la info en archivos JSON, sino que utilizara un ORM (Entity Framework Core) contra una BBDD de SQL Server.
+un conjunto de controladores, y la capa de datos no persistira la info en archivos JSON, sino que utilizara Entity Framework Core 10 contra PostgreSQL 17.
   ## CAPAS
 - Capa Modelos: Esta compuesta por las mismas entidades que antes, pero tambien añade el concepto de DTOs que son objetos que transfieren datos con la idea de 
   devolver la informacion justa y necesaria para resolver la peticion HTTP sin exponer directamente la totalidad de la entidad interna (evita mandar passwords y datos de uso interno)
@@ -22,49 +22,6 @@ La autorizacion combina dos cosas: roles globales con [Authorize] y [Authorize(R
 Para los errores, los servicios lanzan excepciones tipadas y cada controlador las traduce a su codigo HTTP correspondiente. Los errores se registran de forma centralizada en el logger.
 
   ## ORQUESTRACION
-Para esta aplicacion tenemos dos contenedores, el de la API y el de la BBDD de Sql Server. Como son varios que tienen que arrancar a la vez, comunicarse entre si y compartir una red, usaremos Docker Compose para orquestrarlos.
+Docker Compose arranca la API .NET 10 y PostgreSQL 17 en una red compartida. La API espera a que PostgreSQL pase el healthcheck y aplica las migraciones EF Core pendientes al iniciar. Los endpoints v1 permanecen disponibles.
 
-El Dockerfile de la API es igual al del ej anterior, pero con la imagen de aspnet para la ejecucion en vez del runtime.
-```
-  FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
-  WORKDIR /src
-  COPY . .
-  RUN dotnet publish API/App.API.csproj -c Release -o /app
-
-  FROM mcr.microsoft.com/dotnet/aspnet:8.0
-  WORKDIR /app
-  COPY --from=build /app ./
-  ENTRYPOINT ["dotnet", "App.API.dll"]
-```
-
-El fichero docker-compose.yml define los dos servicios sobre una misma red:
-```
-  services:
-    db:
-      image: mcr.microsoft.com/mssql/server:latest
-      ports:
-        - "8009:1433"
-      environment:
-        - mssql_sa_password=<password>
-      volumes:
-        - dbdata:/var/opt/msqql
-      networks:
-        - app-net
-    api:
-      build:
-        context: .
-        dockerfile: API/Dockerfile
-      ports:
-        - "9008:8080"
-      environment:
-        - DBConnectionString=<cadena de conexion a la bbdd>
-      depends_on:
-        - db
-      networks:
-        - app-net
-    volumes:
-      dbdata:
-
-    networks:
-      app-net:
-```
+`docker compose up --build` inicia ambos servicios. La API escucha en `http://localhost:8009`; PostgreSQL se publica en el host en el puerto `9008`.

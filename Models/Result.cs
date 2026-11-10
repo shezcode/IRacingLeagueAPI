@@ -27,7 +27,7 @@ public class Result
         IncidentPoints = incidentPoints;
         Dnf = dnf;
         Notes = notes;
-        FinishedAt = DateTime.Now;
+        FinishedAt = DateTime.UtcNow;
     }
 
     public override string ToString() =>

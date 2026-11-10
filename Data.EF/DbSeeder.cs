@@ -60,13 +60,13 @@ public static class DbSeeder
         context.Registrations.AddRange(regMax, regLewis, regCharles, regLando, regGeorge);
 
         var raceSpa = new Race(gt3League.LeagueId, "Spa-Francorchamps", "Mercedes AMG GT3",
-            new DateTime(2026, 5, 3, 18, 0, 0), 20, 18.5m)
+            new DateTime(2026, 5, 3, 18, 0, 0, DateTimeKind.Utc), 20, 18.5m)
         { Round = 1, IsCompleted = true };
         var raceNurburgring = new Race(gt3League.LeagueId, "Nurburgring GP", "Ferrari 296 GT3",
-            new DateTime(2026, 5, 17, 18, 0, 0), 25, 22.0m)
+            new DateTime(2026, 5, 17, 18, 0, 0, DateTimeKind.Utc), 25, 22.0m)
         { Round = 2, IsCompleted = true };
         var raceMonza = new Race(gt3League.LeagueId, "Monza", "McLaren 720S GT3",
-            new DateTime(2026, 7, 12, 18, 0, 0), 22, 26.0m)
+            new DateTime(2026, 7, 12, 18, 0, 0, DateTimeKind.Utc), 22, 26.0m)
         { Round = 3 };
 
         context.Races.AddRange(raceSpa, raceNurburgring, raceMonza);
