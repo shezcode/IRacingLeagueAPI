@@ -13,7 +13,7 @@ public class AuthService(IConfiguration configuration, IUserRepository users, IU
     public async Task<string> RegisterAsync(UserDtoIn dto, CancellationToken cancellationToken = default)
     {
         if (await users.EmailExistsAsync(dto.Email, cancellationToken)) throw new ConflictException($"An account already exists for '{dto.Email}'.");
-        var user = new User(dto.UserName, dto.Email, HashPassword(dto.Password), Roles.Driver.ToString(), dto.Tag, dto.LicenseClass);
+        var user = new User(dto.UserName, dto.Email, HashPassword(dto.Password), Roles.Driver.ToString(), dto.Tag, "Rookie");
         await users.AddAsync(user, cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         return GenerateToken(UserDTOOut.FromEntity(user));
