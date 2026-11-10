@@ -27,8 +27,6 @@ public class UserService : IUserService
         return user;
     }
 
-    public IEnumerable<User> GetAll() => _repository.GetAll();
-
     // Filter (min iRating, exact license class) + sort applied over IQueryable in SQL.
     public IEnumerable<User> Query(UserQueryParameters p)
     {
@@ -48,12 +46,6 @@ public class UserService : IUserService
 
         return q.ToList();
     }
-
-    // Single-field search: drivers whose Tag contains the term (case-insensitive).
-    public IEnumerable<User> SearchByTag(string tag) =>
-        _repository.GetAll()
-            .Where(u => u.Tag.Contains(tag, StringComparison.OrdinalIgnoreCase))
-            .ToList();
 
     public User GetById(int id)
     {

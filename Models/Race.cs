@@ -28,7 +28,4 @@ public class Race
         IsCompleted = false;
     }
 
-    public override string ToString() =>
-        $"[{RaceId}] R{Round} {Track} ({Car}) — {ScheduledAt:yyyy-MM-dd HH:mm}, " +
-        $"{LapCount} laps, {AmbientTempC:0.#}C{(IsCompleted ? " (completed)" : "")}";
 }

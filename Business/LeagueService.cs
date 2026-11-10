@@ -25,11 +25,6 @@ public class LeagueService : ILeagueService
         return league;
     }
 
-    public IEnumerable<League> GetAll() => _repository.GetAll();
-
-    public IEnumerable<League> GetPublic() =>
-        _repository.GetAll().Where(l => l.IsPublic).ToList();
-
     // Filter/sort applied over the repository's IQueryable so the predicates translate
     // to SQL and run in the database. The public-zone constraint (IsPublic) is pinned
     // here and never client-toggleable, so a private league can't leak through the list.
@@ -50,16 +45,6 @@ public class LeagueService : ILeagueService
 
         return q.ToList();
     }
-
-    public IEnumerable<League> GetOwnedBy(int ownerUserId) =>
-        _repository.GetAll().Where(l => l.OwnerUserId == ownerUserId).ToList();
-
-    // Single-field search: leagues whose Name contains the term (case-insensitive).
-    // Filtering happens here in the service layer, reusing the existing repository.
-    public IEnumerable<League> SearchByName(string name) =>
-        _repository.GetAll()
-            .Where(l => l.Name.Contains(name, StringComparison.OrdinalIgnoreCase))
-            .ToList();
 
     public League GetById(int id)
     {
