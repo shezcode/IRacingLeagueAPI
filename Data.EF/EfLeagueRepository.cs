@@ -10,7 +10,7 @@ public sealed class EfLeagueRepository(AppDbContext context) : ILeagueRepository
     public Task AddAsync(League league, CancellationToken cancellationToken = default)
     { cancellationToken.ThrowIfCancellationRequested(); context.Leagues.Add(league); return Task.CompletedTask; }
     public Task<League?> GetAsync(int id, CancellationToken cancellationToken = default) => context.Leagues.FindAsync([id], cancellationToken).AsTask();
-    public async Task<IReadOnlyList<League>> GetPublicAsync(LeagueQueryParameters p, CancellationToken cancellationToken = default)
+    public async Task<PagedResponse<League>> GetPublicAsync(LeagueQueryParameters p, CancellationToken cancellationToken = default)
     {
         var q = context.Leagues.AsNoTracking().Where(l => l.IsPublic);
         if (!string.IsNullOrWhiteSpace(p.Discipline)) q = q.Where(l => l.Discipline.ToLower() == p.Discipline.ToLower());
@@ -21,7 +21,9 @@ public sealed class EfLeagueRepository(AppDbContext context) : ILeagueRepository
             "maxdrivers" => p.Desc ? q.OrderByDescending(l => l.MaxDrivers) : q.OrderBy(l => l.MaxDrivers),
             _ => p.Desc ? q.OrderByDescending(l => l.Name) : q.OrderBy(l => l.Name)
         };
-        return await q.ToListAsync(cancellationToken);
+        var totalCount = await q.CountAsync(cancellationToken);
+        var items = await q.Skip((p.Page - 1) * p.PageSize).Take(p.PageSize).ToListAsync(cancellationToken);
+        return new PagedResponse<League>(items, p.Page, p.PageSize, totalCount);
     }
     public Task<int> CountOwnedByAsync(int userId, CancellationToken cancellationToken = default) => context.Leagues.CountAsync(l => l.OwnerUserId == userId, cancellationToken);
     public Task UpdateAsync(League league, CancellationToken cancellationToken = default)

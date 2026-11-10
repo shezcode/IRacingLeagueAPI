@@ -12,7 +12,7 @@ public sealed class RaceService(IRaceRepository races, ILeagueRepository leagues
         await unitOfWork.ExecuteInTransactionAsync(async ct => { await races.AddAsync(race, ct); await unitOfWork.SaveChangesAsync(ct); await RenumberRoundsAsync(leagueId, ct); }, cancellationToken);
         return race;
     }
-    public Task<IReadOnlyList<Race>> GetByLeagueAsync(int leagueId, RaceQueryParameters parameters, CancellationToken cancellationToken = default) => races.GetByLeagueAsync(leagueId, parameters, cancellationToken);
+    public Task<PagedResponse<Race>> GetByLeagueAsync(int leagueId, RaceQueryParameters parameters, CancellationToken cancellationToken = default) => races.GetByLeagueAsync(leagueId, parameters, cancellationToken);
     public async Task<Race> GetByIdAsync(int id, CancellationToken cancellationToken = default) => await races.GetAsync(id, cancellationToken) ?? throw new NotFoundException($"Race with id {id} not found.");
     public async Task UpdateAsync(Race race, CancellationToken cancellationToken = default)
     {

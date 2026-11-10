@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Reflection;
+using IRacingLeague.API.Swagger;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -89,11 +90,12 @@ builder.Services.AddSwaggerGen(options =>
 {
     var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
     options.IncludeXmlComments(Path.Combine(AppContext.BaseDirectory, xmlFile), includeControllerXmlComments: true);
+    options.OperationFilter<ExampleRequestBodyOperationFilter>();
     options.SwaggerDoc("v1", new OpenApiInfo
     {
         Title = "iRacing League API",
         Version = "v1",
-        Description = "DWES2 API for the iRacing League Manager — reuses the DWES1 Models and Business layers."
+        Description = "Explore public championships, race calendars, classifications, and driver profiles."
     });
 
     // Let Swagger UI send a Bearer token via the "Authorize" button.
@@ -148,13 +150,16 @@ using (var scope = app.Services.CreateScope())
 // Swagger is left on in every environment so the skeleton is verifiable in the container too.
 app.UseSwagger();
 app.UseSwaggerUI();
-app.MapGet("/", () => Results.Redirect("/swagger"));
+app.MapGet("/", () => Results.Redirect("/swagger")).ExcludeFromDescription();
 
 // Authentication must run before authorization (Step 18 adds [Authorize] policies).
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapGet("/health/live", () => Results.Ok(new { status = "healthy" }));
+app.MapGet("/health/live", () => Results.Ok(new { status = "healthy" }))
+    .WithTags("Health")
+    .WithSummary("Checks whether the API process is running.")
+    .Produces(StatusCodes.Status200OK);
 app.MapGet("/health/ready", async (
     AppDbContext db,
     ILogger<Program> logger,
@@ -176,7 +181,11 @@ app.MapGet("/health/ready", async (
             new { status = "not_ready", checks = new { postgres = "unhealthy" } },
             statusCode: StatusCodes.Status503ServiceUnavailable);
     }
-});
+})
+    .WithTags("Health")
+    .WithSummary("Checks whether the API can reach PostgreSQL.")
+    .Produces(StatusCodes.Status200OK)
+    .Produces(StatusCodes.Status503ServiceUnavailable);
 
 app.MapControllers();
 

@@ -1,5 +1,6 @@
 using IRacingLeague.Data;
 using IRacingLeague.Models;
+using IRacingLeague.Models.Dtos;
 namespace IRacingLeague.Business;
 
 public sealed class ResultService(IResultRepository results, IRegistrationRepository registrations, IUserRepository users, IUnitOfWork unitOfWork) : IResultService
@@ -25,6 +26,7 @@ public sealed class ResultService(IResultRepository results, IRegistrationReposi
         return result;
     }
     public Task<IReadOnlyList<Result>> GetByRaceAsync(int raceId, CancellationToken cancellationToken = default) => results.GetByRaceAsync(raceId, cancellationToken);
+    public Task<PagedResponse<Result>> GetByRacePageAsync(int raceId, PaginationParameters parameters, CancellationToken cancellationToken = default) => results.GetByRacePageAsync(raceId, parameters, cancellationToken);
     public async Task<Result> GetByIdAsync(int id, CancellationToken cancellationToken = default) => await results.GetAsync(id, cancellationToken) ?? throw new NotFoundException($"Result with id {id} not found.");
     public async Task DeleteAsync(int id, CancellationToken cancellationToken = default)
     { if (await results.GetAsync(id, cancellationToken) is null) throw new NotFoundException($"Result with id {id} not found."); await unitOfWork.ExecuteInTransactionAsync(ct => BackOutAsync(id, ct), cancellationToken); }

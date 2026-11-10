@@ -10,7 +10,7 @@ public sealed class EfRaceRepository(AppDbContext context) : IRaceRepository
     public Task AddAsync(Race race, CancellationToken cancellationToken = default)
     { cancellationToken.ThrowIfCancellationRequested(); context.Races.Add(race); return Task.CompletedTask; }
     public Task<Race?> GetAsync(int id, CancellationToken cancellationToken = default) => context.Races.FindAsync([id], cancellationToken).AsTask();
-    public async Task<IReadOnlyList<Race>> GetByLeagueAsync(int leagueId, RaceQueryParameters p, CancellationToken cancellationToken = default)
+    public async Task<PagedResponse<Race>> GetByLeagueAsync(int leagueId, RaceQueryParameters p, CancellationToken cancellationToken = default)
     {
         var q = context.Races.AsNoTracking().Where(r => r.LeagueId == leagueId);
         if (!string.IsNullOrWhiteSpace(p.Track)) q = q.Where(r => r.Track.Contains(p.Track));
@@ -22,7 +22,9 @@ public sealed class EfRaceRepository(AppDbContext context) : IRaceRepository
             "track" => p.Desc ? q.OrderByDescending(r => r.Track) : q.OrderBy(r => r.Track),
             _ => p.Desc ? q.OrderByDescending(r => r.Round) : q.OrderBy(r => r.Round)
         };
-        return await q.ToListAsync(cancellationToken);
+        var totalCount = await q.CountAsync(cancellationToken);
+        var items = await q.Skip((p.Page - 1) * p.PageSize).Take(p.PageSize).ToListAsync(cancellationToken);
+        return new PagedResponse<Race>(items, p.Page, p.PageSize, totalCount);
     }
     public async Task<IReadOnlyList<Race>> GetScheduledByLeagueAsync(int leagueId, CancellationToken cancellationToken = default) =>
         await context.Races.Where(r => r.LeagueId == leagueId).OrderBy(r => r.ScheduledAt).ThenBy(r => r.RaceId).ToListAsync(cancellationToken);
