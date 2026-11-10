@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations.Schema;
+
 namespace IRacingLeague.Models;
 
 public class User
@@ -14,6 +16,8 @@ public class User
     public bool IsActive { get; set; }
     public int TotalWins { get; set; }                      // global, recomputed
     public DateTime JoinedAt { get; set; }
+    [NotMapped]
+    public int RacesCompleted { get; set; }
 
     // Parameterless ctor kept for JSON (de)serialization in a later step.
     public User() { }

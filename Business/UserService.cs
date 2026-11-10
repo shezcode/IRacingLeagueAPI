@@ -5,12 +5,12 @@ namespace IRacingLeague.Business;
 
 public sealed class UserService(IUserRepository repository, ILeagueRepository leagues, IRegistrationService registrations, IUnitOfWork unitOfWork) : IUserService
 {
-    public async Task<User> CreateAsync(string userName, string email, string password, string role, string tag, string licenseClass, CancellationToken cancellationToken = default)
-    { var user = new User(userName, email, PasswordHasher.Hash(password), role, tag, licenseClass); await repository.AddAsync(user, cancellationToken); await unitOfWork.SaveChangesAsync(cancellationToken); return user; }
+    public async Task<User> CreateAsync(string userName, string email, string password, string role, string tag, CancellationToken cancellationToken = default)
+    { var user = new User(userName, email, PasswordHasher.Hash(password), role, tag, "Rookie"); await repository.AddAsync(user, cancellationToken); await unitOfWork.SaveChangesAsync(cancellationToken); return user; }
     public Task<PagedResponse<User>> QueryAsync(UserQueryParameters parameters, CancellationToken cancellationToken = default) => repository.QueryAsync(parameters, cancellationToken);
     public async Task<User> GetByIdAsync(int id, CancellationToken cancellationToken = default) => await repository.GetAsync(id, cancellationToken) ?? throw new NotFoundException($"User with id {id} not found.");
-    public async Task UpdateAsync(User user, CancellationToken cancellationToken = default)
-    { if (await repository.GetAsync(user.UserId, cancellationToken) is null) throw new NotFoundException($"User with id {user.UserId} not found."); await repository.UpdateAsync(user, cancellationToken); await unitOfWork.SaveChangesAsync(cancellationToken); }
+    public async Task UpdateProfileAsync(int id, string userName, string tag, CancellationToken cancellationToken = default)
+    { var user = await GetByIdAsync(id, cancellationToken); user.UserName = userName; user.Tag = tag; await repository.UpdateAsync(user, cancellationToken); await unitOfWork.SaveChangesAsync(cancellationToken); }
     public async Task DeleteAsync(int id, CancellationToken cancellationToken = default)
     {
         if (await repository.GetAsync(id, cancellationToken) is null) throw new NotFoundException($"User with id {id} not found.");
